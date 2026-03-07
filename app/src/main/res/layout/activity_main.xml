@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F5F5">
+
+    <!-- HEADER CON LOGO Y ESTADO -->
+    <LinearLayout
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="16dp"
+        android:background="#FFFFFF"
+        android:elevation="4dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- LOGO -->
+        <ImageView
+            android:id="@+id/imgLogo"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginBottom="8dp"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/logo_gateway" />
+
+        <!-- ESTADO -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:text="Servicio: DESCONOCIDO"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            android:layout_marginBottom="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <!-- BOTONES DE CONTROL -->
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <Button
+                android:id="@+id/btnStart"
+                android:text="Iniciar"
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="#4CAF50"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/btnStop"
+                android:text="Detener"
+                android:textSize="14sp"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="#F44336"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/btnUpdate"
+                android:text="Actualizar"
+                android:textSize="14sp"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="#2196F3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ✅ NUEVA SECCIÓN: CONFIGURACIÓN DE PANELES -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#FFFFFF"
+        android:elevation="2dp">
+
+        <!-- PANEL IZQUIERDO: ENTRADA (LECTURA) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="#E8F5E9"
+            android:layout_marginEnd="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📥 Conexión Entrante (Panel de Origen)"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:textColor="#2E7D32"
+                android:layout_marginBottom="8dp" />
+
+            <RadioGroup
+                android:id="@+id/rgInputSource"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/rbInputPanel1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Panel 1 (https://gsvden.coffeeji.com)"
+                    android:checked="true"
+                    android:textSize="11sp" />
+
+                <RadioButton
+                    android:id="@+id/rbInputPanel2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Panel 2 (https://maquinas.powerboxchile.cl)"
+                    android:textSize="11sp" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- PANEL DERECHO: SALIDA (ESCRITURA) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="#E3F2FD"
+            android:layout_marginStart="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📤 Conexión Saliente (Panel que obtiene datos)"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:textColor="#1565C0"
+                android:layout_marginBottom="8dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/swOutputPanel1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Panel 1 (https://gsvden.coffeeji.com)"
+                android:checked="true"
+                android:textSize="11sp"
+                app:switchPadding="8dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/swOutputPanel2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Panel 2 (https://maquinas.powerboxchile.cl)"
+                android:checked="false"
+                android:textSize="11sp"
+                android:layout_marginTop="4dp"
+                app:switchPadding="8dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- SEPARATOR -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0" />
+
+    <!-- LOG VIEWER SECTION -->
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- HEADER DE LOGS -->
+        <LinearLayout
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:text="📊 Event Log"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="#333333"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content" />
+
+            <!-- BOTÓN LIMPIAR -->
+            <Button
+                android:id="@+id/btnClearLogs"
+                android:text="🗑️ Limpiar"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="#FF9800"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp" />
+
+            <!-- BOTÓN EXPORTAR -->
+            <Button
+                android:id="@+id/btnExportLogs"
+                android:text="💾 Exportar"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:backgroundTint="#2196F3"
+                style="?android:attr/buttonBarButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp" />
+        </LinearLayout>
+
+        <!-- SCROLL VIEW CON LOGS -->
+        <ScrollView
+            android:id="@+id/scrollLogs"
+            android:background="#263238"
+            android:padding="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <TextView
+                android:id="@+id/tvLogs"
+                android:text="Esperando eventos...\n"
+                android:textSize="11sp"
+                android:textColor="#B0BEC5"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </ScrollView>
+
+        <!-- CONTADOR DE LOGS -->
+        <TextView
+            android:id="@+id/tvLogCount"
+            android:text="0 eventos"
+            android:textSize="12sp"
+            android:textColor="#757575"
+            android:layout_marginTop="4dp"
+            android:gravity="end"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- VERSION FOOTER AT THE BOTTOM -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="8dp"
+        android:background="#FFFFFF"
+        android:elevation="2dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/tvVersion"
+            android:textSize="10sp"
+            android:textColor="#757575"
+            android:textStyle="italic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+</LinearLayout>
