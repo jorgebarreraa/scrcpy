@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import cl.powerbox.gateway.R
@@ -147,10 +148,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        // Registrar receiver de estado
-        registerReceiver(
+        // Registrar receiver de estado (Android 14+ requiere flag de exportación)
+        ContextCompat.registerReceiver(
+            this,
             stateReceiver,
-            IntentFilter(GatewayForegroundService.ACTION_STATE_CHANGED)
+            IntentFilter(GatewayForegroundService.ACTION_STATE_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
         // ✅ Registrar listener de logs

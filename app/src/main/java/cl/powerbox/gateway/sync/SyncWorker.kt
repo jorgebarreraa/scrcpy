@@ -1,7 +1,12 @@
 package cl.powerbox.gateway.sync
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.util.Logger
@@ -28,6 +33,23 @@ class SyncWorker(
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    // Requerido en Android < 12 (API 31) cuando se usa setExpedited()
+    // WorkManager corre el trabajo como foreground service y necesita esta info
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(SYNC_CHANNEL_ID, "Powerbox Gateway Sync", NotificationManager.IMPORTANCE_LOW)
+            nm.createNotificationChannel(ch)
+        }
+        val notif = NotificationCompat.Builder(applicationContext, SYNC_CHANNEL_ID)
+            .setContentTitle("Powerbox Gateway")
+            .setContentText("Sincronizando...")
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setOngoing(true)
+            .build()
+        return ForegroundInfo(SYNC_NOTIF_ID, notif)
+    }
 
     override suspend fun doWork(): Result {
         return try {
@@ -308,5 +330,10 @@ class SyncWorker(
         } catch (_: Throwable) {
             null
         }
+    }
+
+    companion object {
+        private const val SYNC_CHANNEL_ID = "gateway_sync_channel"
+        private const val SYNC_NOTIF_ID = 2
     }
 }

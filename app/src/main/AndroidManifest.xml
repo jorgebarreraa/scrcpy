@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Permisos de tipo de servicio foreground (requeridos en Android 14 / API 34) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     
     <!-- Permisos para auto-actualización -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
