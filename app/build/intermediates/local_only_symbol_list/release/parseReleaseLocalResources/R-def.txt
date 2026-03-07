@@ -1,0 +1,24 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+drawable logo_gateway
+id btnClearLogs
+id btnExportLogs
+id btnStart
+id btnStop
+id btnUpdate
+id imgLogo
+id scrollLogs
+id tvLogCount
+id tvLogs
+id tvStatus
+id tvVersion
+layout activity_main
+mipmap ic_launcher
+mipmap ic_launcher_foreground
+mipmap ic_launcher_round
+string app_name
+string app_version
+string app_version_full
+xml file_paths
