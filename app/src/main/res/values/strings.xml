@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Powerbox Gateway</string>
-    <!-- Added version string resource -->
-    <string name="app_version">v2.0</string>
-    <string name="app_version_full">Powerbox Gateway v2.0</string>
-</resources>
