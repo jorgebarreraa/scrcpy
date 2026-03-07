@@ -8,42 +8,33 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Button
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.FileProvider
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
+import androidx.lifecycle.lifecycleScope
 import cl.powerbox.gateway.R
+import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.service.GatewayForegroundService
-import cl.powerbox.gateway.update.UpdateChecker
-import cl.powerbox.gateway.update.UpdateWorker
 import cl.powerbox.gateway.util.BatteryOptHelper
 import cl.powerbox.gateway.util.Logger
-import cl.powerbox.gateway.util.NetworkUtil
-import kotlinx.coroutines.CoroutineScope
+import cl.powerbox.gateway.util.ServerConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * ✅ MainActivity mejorada con LogViewer en tiempo real
- *    y botón de actualización manual segura.
+ * ✅ MainActivity con LogViewer en tiempo real y panel de diagnóstico de paneles
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var tvStatus: TextView
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
-    private lateinit var btnUpdate: Button
-
     private lateinit var tvLogs: TextView
     private lateinit var scrollLogs: ScrollView
     private lateinit var btnClearLogs: Button
@@ -51,12 +42,25 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLogCount: TextView
     private lateinit var tvVersion: TextView
 
+    // Controles de configuración de paneles
+    private lateinit var rgInputSource: RadioGroup
+    private lateinit var swOutputPanel1: SwitchCompat
+    private lateinit var swOutputPanel2: SwitchCompat
+
+    // Diagnóstico de paneles
+    private lateinit var tvConfigSummary: TextView
+    private lateinit var tvPendingCount: TextView
+
     private val handler = Handler(Looper.getMainLooper())
     private var logCount = 0
 
-    // ✅ Job + Scope propios para corrutinas en la UI (sin GlobalScope, sin cancel() extension)
-    private val uiJob = SupervisorJob()
-    private val uiScope = CoroutineScope(uiJob + Dispatchers.Main)
+    // Refresca el diagnóstico cada 15 segundos mientras la app está visible
+    private val diagnosticRunnable = object : Runnable {
+        override fun run() {
+            refreshDiagnostics()
+            handler.postDelayed(this, 15_000L)
+        }
+    }
 
     // ✅ Listener para nuevos logs
     private val logListener = object : Logger.LogListener {
@@ -84,7 +88,6 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
-        btnUpdate = findViewById(R.id.btnUpdate)
         tvLogs = findViewById(R.id.tvLogs)
         scrollLogs = findViewById(R.id.scrollLogs)
         btnClearLogs = findViewById(R.id.btnClearLogs)
@@ -92,14 +95,23 @@ class MainActivity : AppCompatActivity() {
         tvLogCount = findViewById(R.id.tvLogCount)
         tvVersion = findViewById(R.id.tvVersion)
 
-        // 🔄 Obtener versionName desde el PackageManager
-        val versionName = try {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            pInfo.versionName ?: "N/A"
-        } catch (e: Exception) {
-            "N/A"
-        }
-        tvVersion.text = "Powerbox Gateway v$versionName"
+        // Referencias a controles de configuración de paneles
+        rgInputSource = findViewById(R.id.rgInputSource)
+        swOutputPanel1 = findViewById(R.id.swOutputPanel1)
+        swOutputPanel2 = findViewById(R.id.swOutputPanel2)
+
+        // Referencias al panel de diagnóstico
+        tvConfigSummary = findViewById(R.id.tvConfigSummary)
+        tvPendingCount = findViewById(R.id.tvPendingCount)
+
+        // ✅ Configurar versión dinámica desde BuildConfig
+        tvVersion.text = "Powerbox Gateway v${cl.powerbox.gateway.BuildConfig.VERSION_NAME}"
+
+        // ✅ Cargar configuración actual de paneles
+        loadServerConfig()
+
+        // ✅ Configurar listeners de paneles
+        setupServerConfigListeners()
 
         // Botones de control del servicio
         btnStart.setOnClickListener {
@@ -110,11 +122,6 @@ class MainActivity : AppCompatActivity() {
         btnStop.setOnClickListener {
             GatewayForegroundService.stop(this)
             Logger.i("Usuario detuvo el servicio")
-        }
-
-        // ✅ Botón actualizar (forzar verificación inmediata)
-        btnUpdate.setOnClickListener {
-            onManualUpdateClick()
         }
 
         // ✅ Botón limpiar logs
@@ -151,6 +158,9 @@ class MainActivity : AppCompatActivity() {
 
         // Pedir estado actual
         GatewayForegroundService.queryState(this)
+
+        // ✅ Iniciar refresco periódico del diagnóstico
+        handler.post(diagnosticRunnable)
     }
 
     override fun onPause() {
@@ -159,12 +169,9 @@ class MainActivity : AppCompatActivity() {
 
         // ✅ Desregistrar listener de logs
         Logger.removeListener(logListener)
-    }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        // ✅ Cancelar corrutinas asociadas a la Activity de forma segura
-        uiJob.cancel()
+        // Detener refresco periódico
+        handler.removeCallbacks(diagnosticRunnable)
     }
 
     private fun renderState(running: Boolean) {
@@ -175,8 +182,6 @@ class MainActivity : AppCompatActivity() {
         }
         btnStart.isEnabled = !running
         btnStop.isEnabled = running
-        // El botón de actualizar se mantiene habilitado,
-        // pero la lógica interna impide que corra si no corresponde.
     }
 
     /**
@@ -212,12 +217,7 @@ class MainActivity : AppCompatActivity() {
         val htmlLog = "<font color='$color'>${entry.formatted()}</font><br>"
 
         runOnUiThread {
-            tvLogs.append(
-                android.text.Html.fromHtml(
-                    htmlLog,
-                    android.text.Html.FROM_HTML_MODE_LEGACY
-                )
-            )
+            tvLogs.append(android.text.Html.fromHtml(htmlLog, android.text.Html.FROM_HTML_MODE_LEGACY))
             logCount++
             tvLogCount.text = "$logCount eventos"
 
@@ -261,7 +261,6 @@ class MainActivity : AppCompatActivity() {
         val file = Logger.exportLogs(this)
 
         if (file != null && file.exists()) {
-            // Compartir archivo
             try {
                 val uri = FileProvider.getUriForFile(
                     this,
@@ -302,135 +301,103 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * ✅ Ejecutar actualización manual desde el botón
-     *    Maneja 4 estados:
-     *    - No hay conexión con el servidor de actualizaciones.
-     *    - Actualización en curso, espere a que termine este proceso.
-     *    - No hay actualizaciones disponibles. Tienes la última versión instalada.
-     *    - Actualización disponible, iniciando la descarga.
+     * ✅ Cargar configuración actual de paneles desde SharedPreferences
      */
-    private fun onManualUpdateClick() {
-        // 1) Verificar conexión a internet
-        if (!NetworkUtil.isOnline(this)) {
-            val msg = "No hay conexión con el servidor de actualizaciones."
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-            Logger.w("⚠️ $msg")
-            return
+    private fun loadServerConfig() {
+        val inputSource = ServerConfig.getInputSource(this)
+        when (inputSource) {
+            1 -> rgInputSource.check(R.id.rbInputPanel1)
+            2 -> rgInputSource.check(R.id.rbInputPanel2)
         }
 
-        // 2) Verificar si ya hay una actualización en curso (auto o manual)
-        if (isUpdateInProgress()) {
-            val msg = "Actualización en curso, espere a que termine este proceso."
-            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-            Logger.d("⏳ $msg")
-            return
-        }
+        swOutputPanel1.isChecked = ServerConfig.isOutputPanel1Enabled(this)
+        swOutputPanel2.isChecked = ServerConfig.isOutputPanel2Enabled(this)
 
-        // 3) Ejecutar verificación + disparar Worker en background
-        btnUpdate.isEnabled = false
-        Logger.i("🔵 Usuario solicitó actualización manual")
+        ServerConfig.logCurrentConfig(this)
+    }
 
-        uiScope.launch {
-            try {
-                Logger.d("🔍 [Manual] Verificando actualizaciones en el servidor...")
-
-                val updateInfo = withContext(Dispatchers.IO) {
-                    UpdateChecker(this@MainActivity).checkForUpdate()
-                }
-
-                if (updateInfo == null) {
-                    // No hay actualización
-                    val msg =
-                        "No hay actualizaciones disponibles. Tienes la última versión instalada."
-                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                    Logger.i("ℹ️ $msg")
-                    return@launch
-                } else {
-                    // Hay actualización disponible
-                    val msg = "Actualización disponible, iniciando la descarga."
-                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                    Logger.i("⬇️ $msg Versión: ${updateInfo.versionName}")
-
-                    // Encolar actualización manual inmediata usando el mismo Worker
-                    try {
-                        val constraints = Constraints.Builder()
-                            .setRequiredNetworkType(NetworkType.CONNECTED)
-                            .build()
-
-                        val request = OneTimeWorkRequestBuilder<UpdateWorker>()
-                            .setConstraints(constraints)
-                            .build()
-
-                        WorkManager.getInstance(this@MainActivity)
-                            .enqueueUniqueWork(
-                                MANUAL_UPDATE_WORK_NAME,
-                                ExistingWorkPolicy.KEEP,
-                                request
-                            )
-
-                        Logger.d("📦 UpdateWorker encolado para actualización manual")
-                    } catch (e: Exception) {
-                        Logger.e("❌ Error encolando UpdateWorker manual", e)
-                        Toast.makeText(
-                            this@MainActivity,
-                            "❌ Error al iniciar la actualización",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            } catch (e: Exception) {
-                // Error inesperado al verificar
-                Logger.e("❌ Error en verificación manual de actualización", e)
-                val msg = "No hay conexión con el servidor de actualizaciones."
-                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-            } finally {
-                btnUpdate.isEnabled = true
+    /**
+     * ✅ Configurar listeners para los controles de paneles
+     */
+    private fun setupServerConfigListeners() {
+        rgInputSource.setOnCheckedChangeListener { _, checkedId ->
+            val panelNumber = when (checkedId) {
+                R.id.rbInputPanel1 -> 1
+                R.id.rbInputPanel2 -> 2
+                else -> 1
             }
+            ServerConfig.setInputSource(this, panelNumber)
+            val panelName = if (panelNumber == 1) "CoffeeJi" else "Powerbox"
+            Toast.makeText(
+                this,
+                "📥 Lectura: $panelName",
+                Toast.LENGTH_SHORT
+            ).show()
+            ServerConfig.logCurrentConfig(this)
+            refreshDiagnostics()
+        }
+
+        swOutputPanel1.setOnCheckedChangeListener { _, isChecked ->
+            ServerConfig.setOutputPanel1Enabled(this, isChecked)
+
+            if (!isChecked && !swOutputPanel2.isChecked) {
+                Toast.makeText(
+                    this,
+                    "⚠️ Al menos un panel debe estar activo. Se usará CoffeeJi por defecto.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    if (isChecked) "📤 CoffeeJi habilitado para salida" else "📤 CoffeeJi deshabilitado",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            ServerConfig.logCurrentConfig(this)
+            refreshDiagnostics()
+        }
+
+        swOutputPanel2.setOnCheckedChangeListener { _, isChecked ->
+            ServerConfig.setOutputPanel2Enabled(this, isChecked)
+
+            if (!isChecked && !swOutputPanel1.isChecked) {
+                Toast.makeText(
+                    this,
+                    "⚠️ Al menos un panel debe estar activo. Se usará CoffeeJi por defecto.",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    if (isChecked) "📤 Powerbox habilitado para salida" else "📤 Powerbox deshabilitado",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            ServerConfig.logCurrentConfig(this)
+            refreshDiagnostics()
         }
     }
 
     /**
-     * ✅ Verifica si hay un UpdateWorker en ejecución (auto o manual)
-     *    Considera:
-     *    - AUTO: solo RUNNING (el periódico suele estar ENQUEUED casi siempre).
-     *    - MANUAL: RUNNING o ENQUEUED (para evitar doble disparo).
+     * ✅ Actualiza el panel de diagnóstico con la configuración actual y los pendientes de sincronización.
+     * Consulta la BD en un hilo de IO y actualiza la UI en el hilo principal.
      */
-    private fun isUpdateInProgress(): Boolean {
-        return try {
-            val workManager = WorkManager.getInstance(this)
+    private fun refreshDiagnostics() {
+        tvConfigSummary.text = ServerConfig.getConfigSummary(this)
 
-            val autoUpdates = workManager
-                .getWorkInfosForUniqueWork(AUTO_UPDATE_WORK_NAME)
-                .get()
-
-            val manualUpdates = workManager
-                .getWorkInfosForUniqueWork(MANUAL_UPDATE_WORK_NAME)
-                .get()
-
-            val autoBusy = autoUpdates.any { info ->
-                info.state == WorkInfo.State.RUNNING
+        lifecycleScope.launch {
+            val pendingRequests = withContext(Dispatchers.IO) {
+                AppDatabase.get(applicationContext).pendingRequestDao().count()
+            }
+            val pendingReplenishments = withContext(Dispatchers.IO) {
+                AppDatabase.get(applicationContext).replenishmentEventDao().allUnsent().size
             }
 
-            val manualBusy = manualUpdates.any { info ->
-                info.state == WorkInfo.State.RUNNING ||
-                        info.state == WorkInfo.State.ENQUEUED
+            val total = pendingRequests + pendingReplenishments
+            tvPendingCount.text = when {
+                total == 0 -> "✅ Sin pendientes"
+                else -> "⏳ $total pendiente(s)"
             }
-
-            autoBusy || manualBusy
-        } catch (e: Exception) {
-            Logger.e("Error verificando estado de actualización en curso", e)
-            false
         }
-    }
-
-    companion object {
-        /**
-         * ⚠️ Este nombre debe coincidir con el usado en UpdateScheduler
-         * para el trabajo periódico de auto-actualización.
-         */
-        private const val AUTO_UPDATE_WORK_NAME = "gateway_auto_update"
-
-        // Nombre único para la actualización manual
-        private const val MANUAL_UPDATE_WORK_NAME = "gateway_manual_update"
     }
 }

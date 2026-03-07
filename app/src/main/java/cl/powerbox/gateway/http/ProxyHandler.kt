@@ -9,6 +9,7 @@ import cl.powerbox.gateway.sync.OfflineTransactionSync
 import cl.powerbox.gateway.util.BroadcastHelper
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.NetworkMonitor
+import cl.powerbox.gateway.util.ServerConfig
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -48,7 +49,6 @@ class ProxyHandler(private val ctx: Context) {
         .build()
 
     private val mapper = jacksonObjectMapper()
-    private val REAL_BASE = "https://gsvden.coffeeji.com"
 
     private fun isStockListEndpoint(path: String): Boolean =
         path.contains("coffee/api/device/listTypeAllMaterial") ||
@@ -107,8 +107,11 @@ class ProxyHandler(private val ctx: Context) {
             Logger.d("🔧 Proxy: online=true $upper $path")
 
             return if (upper == "POST" && isReplenishPost(path)) {
-                val okResp = tryForwardAndReturn(method, path, headers, body)
-                if (okResp.code in 200..299) {
+                // Replicar a todos los destinos configurados
+                val results = forwardToAllOutputs(method, path, headers, body)
+                val primaryResult = results.firstOrNull()
+
+                if (primaryResult != null && primaryResult.code in 200..299) {
                     val affectedIds = applyReplenishmentLocally(path, body ?: ByteArray(0))
                     rewriteAllStockCachesWithEffectiveValues()
 
@@ -116,7 +119,10 @@ class ProxyHandler(private val ctx: Context) {
                         BroadcastHelper.notifyStockChanged(ctx, affectedIds)
                     }
                 }
-                ProxyResult(okResp.code, "application/json", okResp.body?.bytes() ?: ByteArray(0))
+
+                primaryResult?.let {
+                    ProxyResult(it.code, "application/json", it.body?.bytes() ?: ByteArray(0))
+                } ?: ProxyResult(503, "application/json", """{"error":"No output destinations configured"}""".toByteArray())
             } else {
                 handleOfflineOrForward(upper, path, headers, body)
             }
@@ -243,21 +249,31 @@ class ProxyHandler(private val ctx: Context) {
         headers: Map<String, String>,
         body: ByteArray?
     ): ProxyResult {
+        // Si es una operación de escritura crítica, replicar a todos los destinos
         if (upper == "POST" && isCriticalOrderEndpoint(path)) {
-            val okResp = tryForwardAndReturn(upper, path, headers, body)
-            if (okResp.code in 200..299) {
+            val results = forwardToAllOutputs(upper, path, headers, body)
+            val primaryResult = results.firstOrNull()
+
+            if (primaryResult != null && primaryResult.code in 200..299) {
                 val affectedIds = applyOrderStockDecrementLocally(path, body ?: ByteArray(0))
                 rewriteAllStockCachesWithEffectiveValues()
                 if (affectedIds.isNotEmpty()) {
                     BroadcastHelper.notifyStockChanged(ctx, affectedIds)
                 }
             }
-            val bytes = okResp.body?.bytes() ?: """{"success":true}""".toByteArray()
-            val ct = okResp.header("Content-Type") ?: "application/json"
-            return ProxyResult(okResp.code, ct, bytes)
+
+            return if (primaryResult != null) {
+                val bytes = primaryResult.body?.bytes() ?: """{"success":true}""".toByteArray()
+                val ct = primaryResult.header("Content-Type") ?: "application/json"
+                ProxyResult(primaryResult.code, ct, bytes)
+            } else {
+                ProxyResult(503, "application/json", """{"error":"No output destinations"}""".toByteArray())
+            }
         }
 
-        val resp = tryForwardAndReturn(upper, path, headers, body)
+        // Para lecturas (GET), usar la fuente de entrada configurada
+        val inputUrl = ServerConfig.getInputSourceUrl(ctx)
+        val resp = tryForwardAndReturn(upper, path, headers, body, inputUrl)
         val bytes = resp.body?.bytes() ?: ByteArray(0)
         val contentType = resp.header("Content-Type") ?: "application/json"
 
@@ -310,13 +326,45 @@ class ProxyHandler(private val ctx: Context) {
 
     // ==================== HELPERS ====================
 
-    private suspend fun tryForwardAndReturn(
+    /**
+     * Reenvía la petición a todos los destinos de salida configurados
+     * Retorna la lista de respuestas (una por cada destino)
+     */
+    private suspend fun forwardToAllOutputs(
         method: String,
         path: String,
         headers: Map<String, String>,
         body: ByteArray?
+    ): List<okhttp3.Response> {
+        val outputUrls = ServerConfig.getOutputUrls(ctx)
+        val results = mutableListOf<okhttp3.Response>()
+
+        Logger.d("📤 Replicando ${method.uppercase()} $path a ${outputUrls.size} destino(s)")
+
+        outputUrls.forEach { baseUrl ->
+            try {
+                val response = tryForwardAndReturn(method, path, headers, body, baseUrl)
+                results.add(response)
+                Logger.d("✅ Replicado a $baseUrl: ${response.code}")
+            } catch (e: Exception) {
+                Logger.e("❌ Error replicando a $baseUrl", e)
+            }
+        }
+
+        return results
+    }
+
+    /**
+     * Reenvía una petición a un servidor específico
+     */
+    private suspend fun tryForwardAndReturn(
+        method: String,
+        path: String,
+        headers: Map<String, String>,
+        body: ByteArray?,
+        baseUrl: String
     ): okhttp3.Response {
-        val url = REAL_BASE + "/" + path.trimStart('/')
+        val url = baseUrl + "/" + path.trimStart('/')
         val builder = Request.Builder().url(url)
 
         headers.forEach { (name, value) ->

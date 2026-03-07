@@ -6,6 +6,7 @@ import androidx.work.WorkerParameters
 import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.NetworkUtil
+import cl.powerbox.gateway.util.ServerConfig
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,8 +29,6 @@ class SyncWorker(
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private val REAL_BASE = "https://gsvden.coffeeji.com"
-
     override suspend fun doWork(): Result {
         return try {
             if (!NetworkUtil.isOnline(applicationContext)) {
@@ -38,6 +37,7 @@ class SyncWorker(
             }
 
             Logger.d("🔄 SyncWorker: Starting synchronization...")
+            ServerConfig.logCurrentConfig(applicationContext)
 
             val syncedPending = syncPendingRequests()
             val syncedReplenishments = syncReplenishmentEvents()
@@ -52,6 +52,10 @@ class SyncWorker(
         }
     }
 
+    /**
+     * Sincroniza las solicitudes pendientes enviándolas a todos los paneles de salida configurados.
+     * Se elimina de la BD solo si el panel primario (primero) responde con éxito.
+     */
     private suspend fun syncPendingRequests(): Int {
         val pending = withContext(Dispatchers.IO) {
             db.pendingRequestDao().allPending()
@@ -62,7 +66,8 @@ class SyncWorker(
             return 0
         }
 
-        Logger.d("Syncing ${pending.size} pending requests...")
+        val outputUrls = ServerConfig.getOutputUrls(applicationContext)
+        Logger.d("Syncing ${pending.size} pending requests to ${outputUrls.size} panel(s)...")
         var synced = 0
 
         for (req in pending) {
@@ -83,25 +88,36 @@ class SyncWorker(
                     req.body.toRequestBody(null)
                 } else null
 
-                val request = Request.Builder()
-                    .url("$REAL_BASE/${req.path.trimStart('/')}")
-                    .method(req.method, requestBody)
-                    .headers(headersBuilder.build())
-                    .build()
+                var primarySuccess = false
 
-                val response = okHttp.newCall(request).execute()
+                for ((index, base) in outputUrls.withIndex()) {
+                    try {
+                        val request = Request.Builder()
+                            .url("$base/${req.path.trimStart('/')}")
+                            .method(req.method, requestBody)
+                            .headers(headersBuilder.build())
+                            .build()
 
-                if (response.code in 200..299) {
+                        val response = okHttp.newCall(request).execute()
+                        val success = response.code in 200..299
+
+                        if (index == 0) primarySuccess = success
+
+                        Logger.d(
+                            "${if (success) "✅" else "⚠️"} Synced ${req.path} → $base (${response.code})"
+                        )
+                        response.close()
+                    } catch (e: Exception) {
+                        Logger.e("Error syncing pending request to $base: ${req.path}", e)
+                    }
+                }
+
+                if (primarySuccess) {
                     withContext(Dispatchers.IO) {
                         db.pendingRequestDao().deleteById(req.id)
                     }
                     synced++
-                    Logger.d("✅ Synced pending request: ${req.path} (code: ${response.code})")
-                } else {
-                    Logger.e("⚠️ Failed to sync pending request: ${req.path} (code: ${response.code})")
                 }
-
-                response.close()
 
             } catch (e: Exception) {
                 Logger.e("Error syncing pending request: ${req.path}", e)
@@ -111,6 +127,12 @@ class SyncWorker(
         return synced
     }
 
+    /**
+     * Sincroniza los eventos de reposición consolidados enviándolos a todos los paneles configurados.
+     * Usa la ruta correcta según el panel destino:
+     *   - CoffeeJi → api/coffee/device/replenishSubmit
+     *   - Powerbox  → api/replenishment
+     */
     private suspend fun syncReplenishmentEvents(): Int {
         val reps = withContext(Dispatchers.IO) {
             db.replenishmentEventDao().allUnsent()
@@ -144,7 +166,6 @@ class SyncWorker(
 
         Logger.d("📊 Consolidated ${allDeltas.size} materials with deltas")
 
-        // Get device ID from SharedPreferences or environment
         val deviceId = getDeviceId()
         if (deviceId.isNullOrEmpty()) {
             Logger.e("❌ Cannot sync: deviceId not available")
@@ -165,47 +186,67 @@ class SyncWorker(
             "items" to items
         )
 
-        return try {
-            Logger.d("📤 SyncWorker: Posting ${items.size} consolidated items to server")
+        val authorizationHeader = getStoredAuthHeader() ?: "Basic c2FiZXI6c2FiZXJfc2VjcmV0"
+        val bladeAuthHeader = getStoredBladeAuthHeader() ?: ""
+        val payloadJson = mapper.writeValueAsString(payload)
+        Logger.d("🔍 Consolidated payload: $payloadJson")
 
-            val authorizationHeader = getStoredAuthHeader() ?: "Basic c2FiZXI6c2FiZXJfc2VjcmV0"
-            val bladeAuthHeader = getStoredBladeAuthHeader() ?: ""
+        val outputUrls = ServerConfig.getOutputUrls(applicationContext)
+        var primarySuccess = false
 
-            val payloadJson = mapper.writeValueAsString(payload)
-            Logger.d("🔍 Consolidated payload: $payloadJson")
-
-            val request = Request.Builder()
-                .url("$REAL_BASE/api/coffee/device/replenishSubmit")
-                .post(payloadJson.toRequestBody(null))
-                .header("Authorization", authorizationHeader)
-                .apply {
-                    if (bladeAuthHeader.isNotEmpty()) {
-                        header("blade-auth", bladeAuthHeader)
-                    }
+        for ((index, base) in outputUrls.withIndex()) {
+            try {
+                // Ruta de reposición según el panel destino
+                val replenishPath = if (base.contains("powerbox")) {
+                    "api/replenishment"                  // Ruta del panel Powerbox (Laravel)
+                } else {
+                    "api/coffee/device/replenishSubmit"  // Ruta original CoffeeJi
                 }
-                .header("Content-Type", "application/json")
-                .build()
 
-            val response = okHttp.newCall(request).execute()
+                Logger.d("📤 SyncWorker: Posting ${items.size} items to $base/$replenishPath")
 
-            if (response.code in 200..299) {
-                withContext(Dispatchers.IO) {
-                    reps.forEach { rep ->
-                        db.replenishmentEventDao().markAsSentSuspend(rep.id)
+                val request = Request.Builder()
+                    .url("$base/$replenishPath")
+                    .post(payloadJson.toRequestBody(null))
+                    .header("Authorization", authorizationHeader)
+                    .apply {
+                        if (bladeAuthHeader.isNotEmpty()) {
+                            header("blade-auth", bladeAuthHeader)
+                        }
                     }
-                    offlineTx.forEach { tx ->
-                        db.offlineTransactionDao().markAsSynced(tx.id, System.currentTimeMillis())
-                    }
+                    .header("Content-Type", "application/json")
+                    .build()
+
+                val response = okHttp.newCall(request).execute()
+                val success = response.code in 200..299
+
+                if (index == 0) primarySuccess = success
+
+                if (success) {
+                    Logger.d("✅ SyncWorker: ${items.size} items sent to $base (code: ${response.code})")
+                } else {
+                    val responseBody = response.body?.string() ?: ""
+                    Logger.d("⚠️ SyncWorker: $base rejected (code: ${response.code}, body: $responseBody)")
                 }
-                Logger.d("✅ SyncWorker: ${items.size} consolidated items sent successfully (code: ${response.code})")
-                reps.size + offlineTx.size
-            } else {
-                val responseBody = response.body?.string() ?: ""
-                Logger.d("⚠️ SyncWorker: Server rejected (code: ${response.code}, body: $responseBody)")
-                0
+
+                response.close()
+            } catch (e: Exception) {
+                Logger.e("❌ SyncWorker: Error syncing replenishments to $base", e)
             }
-        } catch (e: Exception) {
-            Logger.e("❌ SyncWorker: Error syncing replenishments", e)
+        }
+
+        return if (primarySuccess) {
+            withContext(Dispatchers.IO) {
+                reps.forEach { rep ->
+                    db.replenishmentEventDao().markAsSentSuspend(rep.id)
+                }
+                offlineTx.forEach { tx ->
+                    db.offlineTransactionDao().markAsSynced(tx.id, System.currentTimeMillis())
+                }
+            }
+            Logger.d("✅ SyncWorker: ${items.size} consolidated items marked as synced")
+            reps.size + offlineTx.size
+        } else {
             0
         }
     }

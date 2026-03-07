@@ -2,7 +2,7 @@ package cl.powerbox.gateway.sync
 
 import android.content.Context
 import androidx.work.*
-import cl.powerbox.gateway.worker.SyncWorker
+import cl.powerbox.gateway.sync.SyncWorker
 import java.util.concurrent.TimeUnit
 
 /**
