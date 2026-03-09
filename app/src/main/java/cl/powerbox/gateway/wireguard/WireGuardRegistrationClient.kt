@@ -12,30 +12,31 @@ import java.util.concurrent.TimeUnit
 /**
  * Cliente HTTP para registrar la máquina en el servidor WireGuard.
  *
- * El servidor debe exponer:
- *   POST /api/wireguard/register
- *   Body: { machine_number, nickname, android_id, public_key }
- *   Response: { assigned_ip, server_public_key, server_endpoint, dns }
+ * Campos alineados con la tabla MySQL `vending_machines`:
+ *   device_no      → android_id (identificador único del hardware)
+ *   device_ext_no  → machine_number visible (ej: "E00731")
+ *   device_name    → nickname / nombre de la máquina
+ *
+ * POST /api/wireguard/register
+ * Body: { device_no, device_ext_no, device_name, public_key }
+ * Response: { wireguard_ip, server_public_key, server_endpoint, dns }
  */
 object WireGuardRegistrationClient {
 
     data class RegistrationRequest(
-        val machine_number: String,
-        val nickname: String,
-        val android_id: String,
-        val public_key: String
+        val device_no: String,       // android_id → PRIMARY identifier en vending_machines
+        val device_ext_no: String,   // machine_number visible (E00731, 001, etc.)
+        val device_name: String,     // nombre / nickname de la máquina
+        val public_key: String       // clave pública WireGuard (Curve25519, base64)
     )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class RegistrationResponse(
-        val assigned_ip: String,        // e.g. "10.8.0.5/32"
-        val server_public_key: String,
-        val server_endpoint: String,    // e.g. "vpn.powerboxchile.cl:51820"
+        val wireguard_ip: String,       // IP asignada en el túnel, e.g. "10.99.0.5/32"
+        val server_public_key: String,  // clave pública del servidor WireGuard
+        val server_endpoint: String,    // host:puerto del servidor, e.g. "vpn.powerboxchile.cl:51820"
         val dns: String = "1.1.1.1"
     )
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    data class ErrorResponse(val error: String = "unknown")
 
     private val mapper = jacksonObjectMapper()
 
@@ -44,10 +45,6 @@ object WireGuardRegistrationClient {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    /**
-     * @param serverBaseUrl URL base del servidor, e.g. "https://vpn.powerboxchile.cl"
-     * @return RegistrationResponse en éxito, null en fallo
-     */
     fun register(
         serverBaseUrl: String,
         request: RegistrationRequest
@@ -56,7 +53,7 @@ object WireGuardRegistrationClient {
         val json = mapper.writeValueAsString(request)
         val body = json.toRequestBody("application/json".toMediaType())
 
-        Logger.d("[WG] POST $url | machine=${request.machine_number}")
+        Logger.d("[WG] POST $url | device=${request.device_ext_no} (${request.device_no.take(8)}...)")
 
         return try {
             val response = client.newCall(
@@ -67,7 +64,7 @@ object WireGuardRegistrationClient {
 
             if (response.isSuccessful) {
                 val result = mapper.readValue(bodyStr, RegistrationResponse::class.java)
-                Logger.i("[WG] ✅ Registro exitoso → IP=${result.assigned_ip}")
+                Logger.i("[WG] ✅ Registro exitoso → IP=${result.wireguard_ip} | endpoint=${result.server_endpoint}")
                 result
             } else {
                 Logger.e("[WG] ❌ Registro HTTP ${response.code} → $bodyStr")

@@ -110,23 +110,23 @@ object WireGuardManager {
         val response = WireGuardRegistrationClient.register(
             serverBaseUrl = baseUrl,
             request = WireGuardRegistrationClient.RegistrationRequest(
-                machine_number = identity.machineNumber,
-                nickname       = identity.nickname,
-                android_id     = identity.androidId,
-                public_key     = keyPair.publicKey.toBase64()
+                device_no     = identity.androidId,       // android_id → device_no en MySQL
+                device_ext_no = identity.machineNumber,   // E00731, 001, etc.
+                device_name   = identity.nickname,        // nombre visible
+                public_key    = keyPair.publicKey.toBase64()
             )
         )
 
         if (response != null) {
             val now = System.currentTimeMillis()
             dao.upsertAll(listOf(
-                MachineConfig(KEY_WG_ASSIGNED_IP,     response.assigned_ip,        now),
+                MachineConfig(KEY_WG_ASSIGNED_IP,     response.wireguard_ip,       now),
                 MachineConfig(KEY_WG_SERVER_PUBKEY,   response.server_public_key,  now),
                 MachineConfig(KEY_WG_SERVER_ENDPOINT, response.server_endpoint,    now),
                 MachineConfig(KEY_WG_DNS,             response.dns,                now),
                 MachineConfig(KEY_WG_REGISTERED,      "true",                      now)
             ))
-            Logger.i("[WG] ✅ Registrado → IP=${response.assigned_ip} | endpoint=${response.server_endpoint}")
+            Logger.i("[WG] ✅ Registrado → IP=${response.wireguard_ip} | endpoint=${response.server_endpoint}")
         }
     }
 
