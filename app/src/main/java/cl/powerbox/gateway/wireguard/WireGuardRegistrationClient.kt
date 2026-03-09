@@ -46,10 +46,10 @@ object WireGuardRegistrationClient {
         .build()
 
     fun register(
-        serverBaseUrl: String,
+        registerUrl: String,
         request: RegistrationRequest
     ): RegistrationResponse? {
-        val url  = "$serverBaseUrl/api/wireguard/register"
+        val url  = registerUrl   // https://maquinas.powerboxchile.cl/gateway-api/register_wireguard.php
         val json = mapper.writeValueAsString(request)
         val body = json.toRequestBody("application/json".toMediaType())
 

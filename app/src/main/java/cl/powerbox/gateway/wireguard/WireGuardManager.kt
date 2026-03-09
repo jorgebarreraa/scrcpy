@@ -37,7 +37,9 @@ object WireGuardManager {
     private const val KEY_WG_SERVER_ENDPOINT  = "wg_server_endpoint"
     private const val KEY_WG_DNS              = "wg_dns"
     private const val KEY_WG_REGISTERED       = "wg_registered"
-    const val KEY_WG_SERVER_BASE_URL          = "wg_server_base_url"
+    // URL fija del endpoint de registro (mismo hosting que register_device.php)
+    private const val WG_REGISTER_URL = "https://maquinas.powerboxchile.cl/gateway-api/register_wireguard.php"
+    const val KEY_WG_SERVER_BASE_URL  = "wg_server_base_url" // ya no se usa para registro, solo para referencia
 
     private const val TUNNEL_NAME = "powerbox0"
 
@@ -98,17 +100,10 @@ object WireGuardManager {
     }
 
     private suspend fun register(ctx: Context, keyPair: KeyPair) {
-        val dao      = AppDatabase.get(ctx).machineConfigDao()
         val identity = MachineIdentity.get(ctx)
-        val baseUrl  = dao.getValue(KEY_WG_SERVER_BASE_URL)
-
-        if (baseUrl.isNullOrBlank()) {
-            Logger.e("[WG] ❌ wg_server_base_url no configurado en machine_config. Omitiendo registro.")
-            return
-        }
 
         val response = WireGuardRegistrationClient.register(
-            serverBaseUrl = baseUrl,
+            registerUrl = WG_REGISTER_URL,
             request = WireGuardRegistrationClient.RegistrationRequest(
                 device_no     = identity.androidId,       // android_id → device_no en MySQL
                 device_ext_no = identity.machineNumber,   // E00731, 001, etc.
