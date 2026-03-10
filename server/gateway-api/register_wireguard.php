@@ -26,7 +26,7 @@ define('DB_PASS', '@Playstation9875!');
 define('DB_PORT', 3306);
 
 // ─── Config WireGuard (datos del VPS, no del hosting) ────────────────────────
-define('WG_SERVER_PUBKEY',   'bUrYyrwojzalEtSwQVh1MdP7oQqBq6BOuDnNpYtQyUI=');
+define('WG_SERVER_PUBKEY',   'Qy1nQI/K6kuZkR2FWvJfwwwiELXa2WSkWvy+wNh10Fw=');
 define('WG_SERVER_ENDPOINT', 'vpn.powerboxchile.cl:51820');
 define('WG_DNS',             '1.1.1.1');
 define('WG_SUBNET_BASE',     '10.99.0');   // rango separado de la LAN 10.0.0.x
