@@ -45,7 +45,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var btnCheckUpdate: Button
-    private lateinit var tvDeviceExtNo: TextView
+    private lateinit var tvMachineNo: TextView
+    private lateinit var tvMachineName: TextView
+    private lateinit var tvWgIp: TextView
+    private lateinit var tvWgPublicKey: TextView
     private lateinit var tvLogs: TextView
     private lateinit var scrollLogs: ScrollView
     private lateinit var btnClearLogs: Button
@@ -101,7 +104,10 @@ class MainActivity : AppCompatActivity() {
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
         btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
-        tvDeviceExtNo = findViewById(R.id.tvDeviceExtNo)
+        tvMachineNo = findViewById(R.id.tvMachineNo)
+        tvMachineName = findViewById(R.id.tvMachineName)
+        tvWgIp = findViewById(R.id.tvWgIp)
+        tvWgPublicKey = findViewById(R.id.tvWgPublicKey)
         tvLogs = findViewById(R.id.tvLogs)
         scrollLogs = findViewById(R.id.scrollLogs)
         btnClearLogs = findViewById(R.id.btnClearLogs)
@@ -177,9 +183,12 @@ class MainActivity : AppCompatActivity() {
         // ✅ Recargar logs para mostrar eventos generados en segundo plano
         loadExistingLogs()
 
-        // Mostrar N° de dispositivo si ya fue detectado
+        // Poblar sección Características de la Máquina
         val extNo = DeviceRegistrar.getDeviceExtNo(this)
-        tvDeviceExtNo.text = if (extNo != null) "N° dispositivo: $extNo" else ""
+        val devName = DeviceRegistrar.getDeviceName(this)
+        tvMachineNo.text = "N° Máquina: ${extNo ?: "—"}"
+        tvMachineName.text = "Nombre: ${devName ?: "—"}"
+        refreshMachineWgInfo()
 
         // Pedir estado actual
         GatewayForegroundService.queryState(this)
@@ -490,6 +499,21 @@ class MainActivity : AppCompatActivity() {
                     btnCheckUpdate.text = "Actualizar"
                 }
             }
+        }
+    }
+
+    /**
+     * Lee IP WireGuard y Clave Pública desde Room y actualiza la UI.
+     */
+    private fun refreshMachineWgInfo() {
+        lifecycleScope.launch {
+            val dao = withContext(Dispatchers.IO) {
+                AppDatabase.get(applicationContext).machineConfigDao()
+            }
+            val wgIp = withContext(Dispatchers.IO) { dao.getValue("wg_assigned_ip") }
+            val wgKey = withContext(Dispatchers.IO) { dao.getValue("wg_public_key") }
+            tvWgIp.text = "IP Visor: ${wgIp?.removeSuffix("/32") ?: "—"}"
+            tvWgPublicKey.text = "Clave Pública: ${wgKey ?: "—"}"
         }
     }
 

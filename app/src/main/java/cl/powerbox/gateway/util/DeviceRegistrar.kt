@@ -24,6 +24,7 @@ object DeviceRegistrar {
     private const val PREFS_NAME = "gateway_device"
     private const val KEY_EXT_NO = "device_ext_no"
     private const val KEY_DEVICE_NO = "device_no"
+    private const val KEY_DEVICE_NAME = "device_name"
     private const val API_URL = "https://powerboxchile.cl/gateway-api/register_device.php"
 
     private val mapper = jacksonObjectMapper()
@@ -74,6 +75,7 @@ object DeviceRegistrar {
                 .edit()
                 .putString(KEY_EXT_NO, deviceExtNo)
                 .putString(KEY_DEVICE_NO, deviceNo)
+                .putString(KEY_DEVICE_NAME, deviceName)
                 .apply()
 
             val publicIp = getPublicIp()
@@ -114,4 +116,8 @@ object DeviceRegistrar {
     /** Devuelve el N° externo del dispositivo guardado localmente. */
     fun getDeviceExtNo(ctx: Context): String? =
         ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_EXT_NO, null)
+
+    /** Devuelve el nombre del dispositivo guardado localmente. */
+    fun getDeviceName(ctx: Context): String? =
+        ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_DEVICE_NAME, null)
 }
