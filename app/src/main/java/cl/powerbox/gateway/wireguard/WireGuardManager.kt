@@ -1,6 +1,7 @@
 package cl.powerbox.gateway.wireguard
 
 import android.content.Context
+import android.net.VpnService as AndroidVpnService
 import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.data.entity.MachineConfig
 import cl.powerbox.gateway.util.Logger
@@ -185,6 +186,12 @@ object WireGuardManager {
         // Solicitar permiso VPN via root si no está concedido
         ensureVpnPermissionViaRoot(ctx)
 
+        // Verificar que el permiso fue concedido antes de continuar
+        if (AndroidVpnService.prepare(ctx) != null) {
+            Logger.e("[WG] ❌ Permiso VPN no concedido — no se puede levantar el túnel")
+            return
+        }
+
         val wgInterface = Interface.Builder()
             .parsePrivateKey(keyPair.privateKey.toBase64())
             .addAddress(InetNetwork.parse(assignedIp))
@@ -212,18 +219,40 @@ object WireGuardManager {
         Logger.i("[WG] 🔒 Túnel WireGuard activo | IP=$assignedIp | server=$endpoint")
     }
 
-    /** Usa root para conceder permiso VPN sin interacción del usuario */
+    /** Usa root para conceder permiso VPN sin interacción del usuario.
+     *  Prueba varias sintaxis para compatibilidad con distintas versiones de Android. */
     private fun ensureVpnPermissionViaRoot(ctx: Context) {
-        try {
-            val pkg = ctx.packageName
-            val proc = Runtime.getRuntime().exec(arrayOf("su", "-c",
-                "appops set $pkg ACTIVATE_VPN allow"
-            ))
-            proc.waitFor()
-            Logger.d("[WG] Permiso VPN concedido via root")
-        } catch (e: Exception) {
-            Logger.e("[WG] No se pudo conceder permiso VPN via root: ${e.message}")
+        // Si ya tiene permiso, no hacer nada
+        if (AndroidVpnService.prepare(ctx) == null) {
+            Logger.d("[WG] Permiso VPN ya concedido")
+            return
         }
+
+        val pkg = ctx.packageName
+        // Intentar múltiples comandos para distintas versiones de Android
+        val cmds = listOf(
+            "appops set $pkg ACTIVATE_VPN allow",
+            "appops set --user 0 $pkg ACTIVATE_VPN allow",
+            "appops set $pkg android:activate_vpn allow",
+            "appops set $pkg 47 1"  // 47 = ACTIVATE_VPN en algunas versiones
+        )
+
+        for (cmd in cmds) {
+            try {
+                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+                val exit = proc.waitFor()
+                val err = proc.errorStream.bufferedReader().readText().trim()
+                Logger.d("[WG] '$cmd' → exit=$exit err=${err.ifEmpty { "ok" }}")
+                if (AndroidVpnService.prepare(ctx) == null) {
+                    Logger.i("[WG] ✅ Permiso VPN concedido con: $cmd")
+                    return
+                }
+            } catch (e: Exception) {
+                Logger.w("[WG] Cmd falló '$cmd': ${e.message}")
+            }
+        }
+
+        Logger.e("[WG] ❌ No se pudo conceder permiso VPN via root - pkg=$pkg")
     }
 
     fun isConnected(): Boolean = tunnel?.state == Tunnel.State.UP
