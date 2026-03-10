@@ -4,6 +4,7 @@ import android.content.Context
 import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.data.entity.MachineConfig
 import cl.powerbox.gateway.util.Logger
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
@@ -13,7 +14,12 @@ import com.wireguard.config.Peer
 import com.wireguard.crypto.KeyPair
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.InetAddress
+import java.util.concurrent.TimeUnit
 
 /**
  * Gestor del túnel WireGuard.
@@ -41,7 +47,14 @@ object WireGuardManager {
     private const val WG_REGISTER_URL = "https://powerboxchile.cl/gateway-api/register_wireguard.php"
     const val KEY_WG_SERVER_BASE_URL  = "wg_server_base_url" // ya no se usa para registro, solo para referencia
 
+    private const val DEVICE_REGISTER_URL = "https://powerboxchile.cl/gateway-api/register_device.php"
     private const val TUNNEL_NAME = "powerbox0"
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+    private val jsonMapper = jacksonObjectMapper()
 
     private var backend: GoBackend? = null
     private var tunnel: PowerboxTunnel? = null
@@ -99,8 +112,39 @@ object WireGuardManager {
         }
     }
 
+    /**
+     * Pre-registra la máquina en register_device.php para que register_wireguard.php
+     * pueda encontrarla en vending_machines. Esto permite el registro desatendido
+     * sin esperar que la máquina vending se conecte y envíe deviceAllInfo.
+     */
+    private suspend fun ensureDeviceRegistered(identity: MachineIdentity.Identity) {
+        try {
+            val payload = jsonMapper.writeValueAsString(
+                mapOf(
+                    "device_no"     to identity.androidId,
+                    "device_ext_no" to identity.machineNumber,
+                    "device_name"   to identity.nickname,
+                    "device_type"   to "Gateway",
+                    "public_ip"     to "",
+                    "status"        to 1
+                )
+            )
+            val req = Request.Builder()
+                .url(DEVICE_REGISTER_URL)
+                .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val resp = httpClient.newCall(req).execute()
+            Logger.d("[WG] Pre-registro device → HTTP ${resp.code}")
+        } catch (e: Exception) {
+            Logger.w("[WG] Pre-registro device falló (se intentará igual WG): ${e.message}")
+        }
+    }
+
     private suspend fun register(ctx: Context, keyPair: KeyPair) {
         val identity = MachineIdentity.get(ctx)
+
+        // Asegurar que la máquina exista en vending_machines antes de registrar WireGuard
+        ensureDeviceRegistered(identity)
 
         val response = WireGuardRegistrationClient.register(
             registerUrl = WG_REGISTER_URL,
