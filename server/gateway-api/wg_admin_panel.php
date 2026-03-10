@@ -218,7 +218,7 @@ function apiDeletePeer(PDO $pdo): void {
 <div class="container">
   <div id="loginCard" class="card p-4">
     <div class="text-center mb-4">
-      <h5 class="fw-bold">🔐 Powerbox Acceso IntranetWireGuard</h5>
+      <h5 class="fw-bold">🔐 Powerbox Acceso Intranet</h5>
       <small class="text-muted">Panel Creador de Cuentas</small>
     </div>
     <?php if (!empty($loginError)): ?>
@@ -656,7 +656,6 @@ function buildConf(label, privateKey, ip, allowedIps) {
 PrivateKey = ${privateKey}
 Address = ${ipClean}/32
 DNS = ${WG_DNS}
-
 [Peer]
 PublicKey = ${WG_SERVER_PUBKEY}
 Endpoint = ${WG_SERVER_ENDPOINT}
@@ -763,7 +762,6 @@ function viewVendingConf(peer) {
 PrivateKey = <PRIVADA_DEL_DISPOSITIVO>
 Address = ${ipClean}/32
 DNS = ${WG_DNS}
-
 [Peer]
 PublicKey = ${WG_SERVER_PUBKEY}
 Endpoint = ${WG_SERVER_ENDPOINT}
