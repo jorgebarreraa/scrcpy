@@ -186,7 +186,7 @@ function apiDeletePeer(PDO $pdo): void {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Powerbox — WireGuard Admin</title>
+<title>Powerbox — Panel Cuentas Acceso Remoto</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <style>
@@ -218,8 +218,8 @@ function apiDeletePeer(PDO $pdo): void {
 <div class="container">
   <div id="loginCard" class="card p-4">
     <div class="text-center mb-4">
-      <h5 class="fw-bold">🔐 Powerbox WireGuard</h5>
-      <small class="text-muted">Panel de Administración</small>
+      <h5 class="fw-bold">🔐 Powerbox Acceso IntranetWireGuard</h5>
+      <small class="text-muted">Panel Creador de Cuentas</small>
     </div>
     <?php if (!empty($loginError)): ?>
       <div class="alert alert-danger py-2"><?= htmlspecialchars($loginError) ?></div>
@@ -237,7 +237,7 @@ function apiDeletePeer(PDO $pdo): void {
 <!-- ══════════════════════════════ PANEL ════════════════════════════════════ -->
 <!-- Navbar -->
 <nav class="navbar navbar-dark bg-dark px-3">
-  <span class="navbar-brand"><i class="bi bi-shield-lock-fill me-2"></i>Powerbox WireGuard</span>
+  <span class="navbar-brand"><img src="https://powerboxchile.cl/wp-content/uploads/2025/03/Logo_wordpress.png" alt="Logo" style="max-width: 15%; height: auto;"> Vending Machine Network </span>
   <div class="d-flex align-items-center gap-3">
     <small class="text-light opacity-75">VPS: 45.225.92.2</small>
     <form method="post" class="m-0">
@@ -255,7 +255,7 @@ function apiDeletePeer(PDO $pdo): void {
         <div class="d-flex align-items-center gap-3">
           <div class="fs-2 text-primary"><i class="bi bi-server"></i></div>
           <div>
-            <div class="fw-bold">Servidor WireGuard</div>
+            <div class="fw-bold">Servidor Intranet</div>
             <small class="text-muted font-monospace">vpn.powerboxchile.cl:51820</small><br>
             <small class="text-muted">IP: 45.225.92.2</small>
           </div>
@@ -656,6 +656,7 @@ function buildConf(label, privateKey, ip, allowedIps) {
 PrivateKey = ${privateKey}
 Address = ${ipClean}/32
 DNS = ${WG_DNS}
+
 [Peer]
 PublicKey = ${WG_SERVER_PUBKEY}
 Endpoint = ${WG_SERVER_ENDPOINT}
@@ -762,6 +763,7 @@ function viewVendingConf(peer) {
 PrivateKey = <PRIVADA_DEL_DISPOSITIVO>
 Address = ${ipClean}/32
 DNS = ${WG_DNS}
+
 [Peer]
 PublicKey = ${WG_SERVER_PUBKEY}
 Endpoint = ${WG_SERVER_ENDPOINT}
