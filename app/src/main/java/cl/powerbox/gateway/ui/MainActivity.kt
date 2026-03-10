@@ -1,16 +1,12 @@
 package cl.powerbox.gateway.ui
 
 import android.content.BroadcastReceiver
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
 import android.widget.Button
 import android.widget.RadioGroup
 import android.widget.ScrollView
@@ -25,11 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import cl.powerbox.gateway.R
 import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.service.GatewayForegroundService
-import cl.powerbox.gateway.update.RootInstaller
-import cl.powerbox.gateway.update.UpdateChecker
-import cl.powerbox.gateway.update.UpdateDownloader
 import cl.powerbox.gateway.util.BatteryOptHelper
-import cl.powerbox.gateway.util.DeviceRegistrar
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.ServerConfig
 import kotlinx.coroutines.Dispatchers
@@ -44,8 +36,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
-    private lateinit var btnCheckUpdate: Button
-    private lateinit var tvDeviceExtNo: TextView
     private lateinit var tvLogs: TextView
     private lateinit var scrollLogs: ScrollView
     private lateinit var btnClearLogs: Button
@@ -73,10 +63,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ✅ Listener para nuevos logs (solo INFO, WARN, ERROR — no DEBUG spam)
+    // ✅ Listener para nuevos logs
     private val logListener = object : Logger.LogListener {
         override fun onNewLog(entry: Logger.LogEntry) {
-            if (entry.level == "DEBUG") return
             handler.post {
                 appendLogToUI(entry)
             }
@@ -100,8 +89,6 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
-        btnCheckUpdate = findViewById(R.id.btnCheckUpdate)
-        tvDeviceExtNo = findViewById(R.id.tvDeviceExtNo)
         tvLogs = findViewById(R.id.tvLogs)
         scrollLogs = findViewById(R.id.scrollLogs)
         btnClearLogs = findViewById(R.id.btnClearLogs)
@@ -138,11 +125,6 @@ class MainActivity : AppCompatActivity() {
             Logger.i("Usuario detuvo el servicio")
         }
 
-        // ✅ Botón verificar/instalar actualización manual
-        btnCheckUpdate.setOnClickListener {
-            checkForUpdateManually()
-        }
-
         // ✅ Botón limpiar logs
         btnClearLogs.setOnClickListener {
             showClearLogsDialog()
@@ -155,6 +137,9 @@ class MainActivity : AppCompatActivity() {
 
         // Estado inicial
         renderState(GatewayForegroundService.isRunning(this))
+
+        // ✅ Cargar logs existentes
+        loadExistingLogs()
 
         // 🔋 Pedir exención de batería
         BatteryOptHelper.maybeRequestOnce(this)
@@ -173,13 +158,6 @@ class MainActivity : AppCompatActivity() {
 
         // ✅ Registrar listener de logs
         Logger.addListener(logListener)
-
-        // ✅ Recargar logs para mostrar eventos generados en segundo plano
-        loadExistingLogs()
-
-        // Mostrar N° de dispositivo si ya fue detectado
-        val extNo = DeviceRegistrar.getDeviceExtNo(this)
-        tvDeviceExtNo.text = if (extNo != null) "N° dispositivo: $extNo" else ""
 
         // Pedir estado actual
         GatewayForegroundService.queryState(this)
@@ -216,7 +194,7 @@ class MainActivity : AppCompatActivity() {
         tvLogs.text = ""
         logCount = 0
 
-        val logs = Logger.getAllLogs().filter { it.level != "DEBUG" }
+        val logs = Logger.getAllLogs()
         if (logs.isEmpty()) {
             tvLogs.text = "📋 Esperando eventos...\n"
             tvLogCount.text = "0 eventos"
@@ -280,77 +258,48 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * ✅ Exportar logs — guarda en la carpeta Descargas pública del dispositivo
+     * ✅ Exportar logs a archivo .log
      */
     private fun exportLogs() {
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val srcFile = Logger.exportLogs(this@MainActivity)
-            if (srcFile == null || !srcFile.exists()) {
-                withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "❌ Error al exportar logs", Toast.LENGTH_SHORT).show()
-                }
-                return@launch
-            }
+        val file = Logger.exportLogs(this)
 
+        if (file != null && file.exists()) {
             try {
-                val fileName = srcFile.name
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // API 29+: insertar en MediaStore Downloads (accesible por cualquier app)
-                    val values = ContentValues().apply {
-                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                        put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-                        put(MediaStore.Downloads.IS_PENDING, 1)
-                    }
-                    val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                    val itemUri = contentResolver.insert(collection, values)!!
-                    contentResolver.openOutputStream(itemUri)!!.use { out ->
-                        srcFile.inputStream().use { it.copyTo(out) }
-                    }
-                    values.clear()
-                    values.put(MediaStore.Downloads.IS_PENDING, 0)
-                    contentResolver.update(itemUri, values, null, null)
+                val uri = FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.fileprovider",
+                    file
+                )
 
-                    withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        Logger.i("Logs exportados a Descargas: $fileName")
-                        Toast.makeText(this@MainActivity,
-                            "✅ Guardado en Descargas:\n$fileName",
-                            Toast.LENGTH_LONG).show()
-                    }
-                } else {
-                    // API < 29: copiar directo a /sdcard/Download/
-                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    downloadsDir.mkdirs()
-                    val destFile = java.io.File(downloadsDir, fileName)
-                    srcFile.copyTo(destFile, overwrite = true)
-
-                    withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        Logger.i("Logs exportados: ${destFile.absolutePath}")
-                        Toast.makeText(this@MainActivity,
-                            "✅ Guardado en:\n${destFile.absolutePath}",
-                            Toast.LENGTH_LONG).show()
-                    }
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
+
+                startActivity(Intent.createChooser(shareIntent, "Exportar logs"))
+
+                Logger.i("Logs exportados: ${file.name}")
+                Toast.makeText(
+                    this,
+                    "✅ Logs exportados\n${file.name}",
+                    Toast.LENGTH_LONG
+                ).show()
+
             } catch (e: Exception) {
-                Logger.e("Error exportando logs a Descargas", e)
-                // Fallback: share intent con FileProvider
-                withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    try {
-                        val uri = FileProvider.getUriForFile(
-                            this@MainActivity,
-                            "${packageName}.fileprovider",
-                            srcFile
-                        )
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        startActivity(Intent.createChooser(intent, "Exportar logs"))
-                    } catch (ex: Exception) {
-                        Toast.makeText(this@MainActivity, "❌ Error al exportar logs", Toast.LENGTH_SHORT).show()
-                    }
-                }
+                Logger.e("Error compartiendo logs", e)
+                Toast.makeText(
+                    this,
+                    "❌ Error al compartir logs",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
+        } else {
+            Toast.makeText(
+                this,
+                "❌ Error al exportar logs",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -381,7 +330,7 @@ class MainActivity : AppCompatActivity() {
                 else -> 1
             }
             ServerConfig.setInputSource(this, panelNumber)
-            val panelName = if (panelNumber == 1) "Panel 1 (CoffeeJi)" else "Panel 2 (Powerbox)"
+            val panelName = if (panelNumber == 1) "CoffeeJi" else "Powerbox"
             Toast.makeText(
                 this,
                 "📥 Lectura: $panelName",
@@ -397,13 +346,13 @@ class MainActivity : AppCompatActivity() {
             if (!isChecked && !swOutputPanel2.isChecked) {
                 Toast.makeText(
                     this,
-                    "⚠️ Al menos un panel debe estar activo. Se usará Panel 1 por defecto.",
+                    "⚠️ Al menos un panel debe estar activo. Se usará CoffeeJi por defecto.",
                     Toast.LENGTH_LONG
                 ).show()
             } else {
                 Toast.makeText(
                     this,
-                    if (isChecked) "📤 Panel 1 (CoffeeJi) habilitado" else "📤 Panel 1 (CoffeeJi) deshabilitado",
+                    if (isChecked) "📤 CoffeeJi habilitado para salida" else "📤 CoffeeJi deshabilitado",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -417,79 +366,18 @@ class MainActivity : AppCompatActivity() {
             if (!isChecked && !swOutputPanel1.isChecked) {
                 Toast.makeText(
                     this,
-                    "⚠️ Al menos un panel debe estar activo. Se usará Panel 1 por defecto.",
+                    "⚠️ Al menos un panel debe estar activo. Se usará CoffeeJi por defecto.",
                     Toast.LENGTH_LONG
                 ).show()
             } else {
                 Toast.makeText(
                     this,
-                    if (isChecked) "📤 Panel 2 (Powerbox) habilitado" else "📤 Panel 2 (Powerbox) deshabilitado",
+                    if (isChecked) "📤 Powerbox habilitado para salida" else "📤 Powerbox deshabilitado",
                     Toast.LENGTH_SHORT
                 ).show()
             }
             ServerConfig.logCurrentConfig(this)
             refreshDiagnostics()
-        }
-    }
-
-    /**
-     * ✅ Verificar actualizaciones manualmente desde el botón
-     */
-    private fun checkForUpdateManually() {
-        btnCheckUpdate.isEnabled = false
-        btnCheckUpdate.text = "Buscando…"
-        Logger.i("🔍 Verificando actualización manual...")
-
-        lifecycleScope.launch {
-            try {
-                val info = withContext(Dispatchers.IO) {
-                    UpdateChecker(applicationContext).checkForUpdate()
-                }
-
-                if (info != null) {
-                    Logger.i("✅ Nueva versión disponible: ${info.versionName} (code ${info.versionCode})")
-                    runOnUiThread {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("Nueva versión disponible")
-                            .setMessage("Versión ${info.versionName}\n\n${info.changelog}\n\n¿Descargar e instalar ahora?")
-                            .setPositiveButton("Instalar") { _, _ ->
-                                lifecycleScope.launch {
-                                    Logger.i("⬇️ Descargando actualización ${info.versionName}...")
-                                    val apkFile = withContext(Dispatchers.IO) {
-                                        UpdateDownloader(applicationContext).downloadApk(info.apkUrl, info.md5)
-                                    }
-                                    if (apkFile != null) {
-                                        Logger.i("📦 APK descargado, instalando...")
-                                        val ok = withContext(Dispatchers.IO) { RootInstaller().installSilently(apkFile) }
-                                        if (ok) {
-                                            Logger.i("✅ Actualización instalada. Reiniciando...")
-                                            withContext(Dispatchers.IO) { RootInstaller().restartApp() }
-                                        } else {
-                                            Logger.e("❌ Fallo al instalar APK")
-                                            Toast.makeText(this@MainActivity, "❌ Error al instalar", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } else {
-                                        Logger.e("❌ Fallo al descargar APK")
-                                        Toast.makeText(this@MainActivity, "❌ Error descargando APK", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                            .setNegativeButton("Cancelar", null)
-                            .show()
-                    }
-                } else {
-                    Logger.i("✅ App ya está actualizada")
-                    Toast.makeText(this@MainActivity, "✅ App ya está actualizada", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Logger.e("❌ Error verificando actualización", e)
-                Toast.makeText(this@MainActivity, "❌ Error al verificar: ${e.message}", Toast.LENGTH_LONG).show()
-            } finally {
-                runOnUiThread {
-                    btnCheckUpdate.isEnabled = true
-                    btnCheckUpdate.text = "Actualizar"
-                }
-            }
         }
     }
 

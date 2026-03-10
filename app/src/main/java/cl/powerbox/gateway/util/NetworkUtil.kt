@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
-import java.net.NetworkInterface
 
 object NetworkUtil {
 
@@ -70,18 +69,6 @@ object NetworkUtil {
                 else -> ConnectionType.UNKNOWN
             }
         }
-    }
-
-    /** Retorna la IP local WiFi/Ethernet del dispositivo, o "???" si no puede determinarse. */
-    fun getLocalIpAddress(): String {
-        return try {
-            NetworkInterface.getNetworkInterfaces()
-                ?.asSequence()
-                ?.filter { !it.isLoopback && it.isUp }
-                ?.flatMap { it.inetAddresses.asSequence() }
-                ?.firstOrNull { !it.isLoopbackAddress && it.hostAddress?.contains('.') == true }
-                ?.hostAddress ?: "???"
-        } catch (_: Throwable) { "???" }
     }
 
     enum class ConnectionType {

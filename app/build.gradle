@@ -92,4 +92,6 @@ dependencies {
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "com.google.android.material:material:1.12.0"
 
+    // WireGuard - túnel VPN de bajo consumo para máquinas vending
+    implementation "com.wireguard.android:tunnel:1.0.20230706"
 }

@@ -5,7 +5,6 @@ import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.data.entity.PendingRequest
 import cl.powerbox.gateway.data.entity.ReplenishmentEvent
 import cl.powerbox.gateway.data.entity.StockState
-import cl.powerbox.gateway.data.entity.TrafficLog
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.NetworkUtil
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -97,13 +96,6 @@ class HttpServer(private val ctx: Context) {
                         call.respondText("✅ Peticiones eliminadas", ContentType.Text.Plain)
                     }
 
-                    // Log de tráfico interceptado
-                    get("/__debug/traffic") {
-                        val list = withContext(Dispatchers.IO) { db.trafficLogDao().getRecent() }
-                        val html = buildTrafficLogHtml(list)
-                        call.respondText(html, ContentType.Text.Html)
-                    }
-
                     // ========================== Proxy catch-all ==========================
                     route("/{...}") {
                         get { handleProxyRequest(call, ctx) }
@@ -117,7 +109,7 @@ class HttpServer(private val ctx: Context) {
                 }
             }.start(wait = false)
 
-            Logger.i("🌐 Servidor HTTP iniciado en puerto 9090")
+            Logger.d("HTTP server started on 0.0.0.0:9090")
 
         } catch (e: Exception) {
             Logger.e("Failed to start HTTP server: ${e.message}", e)
@@ -186,7 +178,6 @@ class HttpServer(private val ctx: Context) {
                         <a href="/__debug/stock" class="btn">📦 Stock Actual</a>
                         <a href="/__debug/pending" class="btn">⏳ Peticiones Pendientes</a>
                         <a href="/__debug/replenishments" class="btn">🔄 Reabastecimientos</a>
-                        <a href="/__debug/traffic" class="btn" style="background:#764ba2;">🔍 Tráfico Interceptado</a>
                     </div>
                     
                     <div class="card">
@@ -515,110 +506,6 @@ class HttpServer(private val ctx: Context) {
         }}
                     
                     <a href="/__debug">← Volver al panel</a>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-    }
-
-    private fun buildTrafficLogHtml(logs: List<TrafficLog>): String {
-        val dirColors = mapOf(
-            "VENDING→GW" to "#667eea",
-            "GW→CJ"      to "#10b981",
-            "GW→PB"      to "#f59e0b"
-        )
-
-        val rows = logs.joinToString("") { log ->
-            val dirColor = dirColors[log.direction] ?: "#6b7280"
-            val statusColor = when {
-                log.responseStatus in 200..299 -> "#10b981"
-                log.responseStatus in 400..499 -> "#f59e0b"
-                log.responseStatus >= 500      -> "#ef4444"
-                else                           -> "#6b7280"
-            }
-            val onlineIcon = if (log.isOnline) "🟢" else "🔴"
-            val reqBody  = log.requestBody?.replace("<", "&lt;")?.replace(">", "&gt;") ?: "-"
-            val respBody = log.responseBody?.replace("<", "&lt;")?.replace(">", "&gt;") ?: "-"
-            """
-            <tr>
-                <td style="font-size:0.8rem;color:#6b7280;white-space:nowrap;">${dateFormat.format(java.util.Date(log.timestamp))}</td>
-                <td><span style="background:$dirColor;color:white;padding:2px 6px;border-radius:4px;font-size:0.8rem;font-weight:600;">${log.direction}</span></td>
-                <td><span style="background:#e5e7eb;padding:2px 6px;border-radius:4px;font-size:0.8rem;">${log.method}</span></td>
-                <td style="font-size:0.85rem;word-break:break-all;">${log.path}</td>
-                <td style="font-size:0.8rem;color:#6b7280;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="$reqBody">$reqBody</td>
-                <td style="text-align:center;font-weight:bold;color:$statusColor;">${log.responseStatus}</td>
-                <td style="font-size:0.8rem;color:#6b7280;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="$respBody">$respBody</td>
-                <td style="text-align:center;font-size:0.8rem;">${log.durationMs}ms</td>
-                <td style="text-align:center;">$onlineIcon</td>
-            </tr>
-            """
-        }
-
-        val total  = logs.size
-        val errors = logs.count { it.responseStatus >= 400 }
-        val online = logs.count { it.isOnline }
-        val offline= total - online
-
-        return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="refresh" content="10">
-                <title>Traffic Log</title>
-                <style>
-                    * { margin:0; padding:0; box-sizing:border-box; }
-                    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; background:#f0f2f5; padding:1.5rem; }
-                    .container { max-width:1600px; margin:0 auto; background:white; padding:1.5rem; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
-                    h1 { color:#333; margin-bottom:1rem; }
-                    .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; margin:1rem 0; }
-                    .sc { background:#f8fafc; padding:0.75rem; border-radius:8px; text-align:center; }
-                    .sl { font-size:0.8rem; color:#6b7280; margin-bottom:0.25rem; }
-                    .sv { font-size:1.5rem; font-weight:bold; color:#1f2937; }
-                    table { width:100%; border-collapse:collapse; margin-top:1rem; font-size:0.85rem; }
-                    th,td { padding:0.6rem 0.75rem; text-align:left; border-bottom:1px solid #e5e7eb; }
-                    th { background:#764ba2; color:white; font-weight:600; white-space:nowrap; }
-                    tr:hover { background:#f9fafb; }
-                    a { color:#667eea; text-decoration:none; font-weight:500; display:inline-block; margin-top:1rem; }
-                    a:hover { text-decoration:underline; }
-                    .legend { display:flex; gap:1rem; flex-wrap:wrap; margin:0.5rem 0; font-size:0.85rem; }
-                    .dot { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:4px; vertical-align:middle; }
-                    .refresh-note { text-align:center; margin-top:1rem; color:#6b7280; font-size:0.8rem; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🔍 Tráfico Interceptado</h1>
-                    <div class="legend">
-                        <span><span class="dot" style="background:#667eea;"></span>VENDING→GW</span>
-                        <span><span class="dot" style="background:#10b981;"></span>GW→CJ (CoffeeJi)</span>
-                        <span><span class="dot" style="background:#f59e0b;"></span>GW→PB (Powerbox)</span>
-                    </div>
-                    <div class="summary">
-                        <div class="sc"><div class="sl">Total</div><div class="sv">$total</div></div>
-                        <div class="sc"><div class="sl">Errores (4xx/5xx)</div><div class="sv" style="color:#ef4444;">$errors</div></div>
-                        <div class="sc"><div class="sl">Online</div><div class="sv" style="color:#10b981;">$online</div></div>
-                        <div class="sc"><div class="sl">Offline</div><div class="sv" style="color:#f59e0b;">$offline</div></div>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Timestamp</th>
-                                <th>Dirección</th>
-                                <th>Método</th>
-                                <th>Path</th>
-                                <th>Request Body</th>
-                                <th style="text-align:center;">Status</th>
-                                <th>Response Body</th>
-                                <th style="text-align:center;">Duración</th>
-                                <th style="text-align:center;">Red</th>
-                            </tr>
-                        </thead>
-                        <tbody>$rows</tbody>
-                    </table>
-                    <a href="/__debug">← Volver al panel</a>
-                    <div class="refresh-note">⟳ Auto-refresh cada 10 segundos</div>
                 </div>
             </body>
             </html>
