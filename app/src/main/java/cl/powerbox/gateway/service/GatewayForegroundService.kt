@@ -13,7 +13,11 @@ import androidx.core.app.NotificationCompat
 import cl.powerbox.gateway.sync.SyncScheduler
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.NetWatcher
+import cl.powerbox.gateway.wireguard.WireGuardManager
 import cl.powerbox.gateway.worker.CleanupWorker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class GatewayForegroundService : Service() {
 
@@ -88,6 +92,11 @@ class GatewayForegroundService : Service() {
             // Programar limpieza
             CleanupWorker.schedule(applicationContext)
 
+            // Iniciar túnel WireGuard
+            CoroutineScope(Dispatchers.IO).launch {
+                WireGuardManager.setup(applicationContext)
+            }
+
             // Iniciar NetWatcher para detectar cuando vuelva internet
             netWatcher = NetWatcher(applicationContext) {
                 Logger.d("NetWatcher: volvió internet → kick Sync")
@@ -110,6 +119,9 @@ class GatewayForegroundService : Service() {
     override fun onDestroy() {
         try { netWatcher?.stop() } catch (_: Throwable) {}
         netWatcher = null
+        CoroutineScope(Dispatchers.IO).launch {
+            try { WireGuardManager.stop() } catch (_: Throwable) {}
+        }
 
         setRunning(this, false)
         super.onDestroy()
