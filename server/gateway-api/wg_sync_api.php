@@ -46,7 +46,13 @@ try {
     exit;
 }
 
-$action = $_GET['action'] ?? ($_POST['action'] ?? '');
+// Para POST con JSON body, leer el body una sola vez y cachear
+$jsonBody = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $jsonBody = json_decode(file_get_contents('php://input'), true) ?? [];
+}
+
+$action = $_GET['action'] ?? ($_POST['action'] ?? ($jsonBody['action'] ?? ''));
 
 // ─── GET pending: peers listos para activar (vending + manuales) ─────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'pending') {
@@ -89,8 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'pending') {
 
 // ─── POST activate: marcar peer como activo ───────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'activate') {
-    $raw    = file_get_contents('php://input');
-    $data   = json_decode($raw, true);
+    $data   = $jsonBody ?? [];
     $id     = intval($data['id']     ?? 0);
     $source = $data['source'] ?? 'vending';   // 'vending' | 'manual'
 
