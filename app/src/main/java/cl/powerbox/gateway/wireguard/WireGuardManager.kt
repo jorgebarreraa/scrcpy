@@ -32,7 +32,7 @@ object WireGuardManager {
     // Keys en machine_config
     private const val KEY_WG_PRIVATE_KEY      = "wg_private_key"
     private const val KEY_WG_PUBLIC_KEY       = "wg_public_key"
-    private const val KEY_WG_ASSIGNED_IP      = "wg_assigned_ip"
+    const val KEY_WG_ASSIGNED_IP              = "wg_assigned_ip"
     private const val KEY_WG_SERVER_PUBKEY    = "wg_server_public_key"
     private const val KEY_WG_SERVER_ENDPOINT  = "wg_server_endpoint"
     private const val KEY_WG_DNS              = "wg_dns"
@@ -113,6 +113,7 @@ object WireGuardManager {
         )
 
         if (response != null) {
+            val dao = AppDatabase.get(ctx).machineConfigDao()
             val now = System.currentTimeMillis()
             dao.upsertAll(listOf(
                 MachineConfig(KEY_WG_ASSIGNED_IP,     response.wireguard_ip,       now),
