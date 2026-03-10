@@ -3,9 +3,9 @@ package cl.powerbox.gateway.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.VpnService
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -19,7 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class GatewayForegroundService : Service() {
+class GatewayForegroundService : VpnService() {
 
     companion object {
         private const val CHANNEL_ID = "gateway_offline_channel"
@@ -94,7 +94,7 @@ class GatewayForegroundService : Service() {
 
             // Iniciar túnel WireGuard
             CoroutineScope(Dispatchers.IO).launch {
-                WireGuardManager.setup(applicationContext)
+                WireGuardManager.setup(this@GatewayForegroundService)
             }
 
             // Iniciar NetWatcher para detectar cuando vuelva internet
