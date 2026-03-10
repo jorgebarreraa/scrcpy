@@ -45,3 +45,21 @@ ALTER TABLE `vending_machines`
         COMMENT '1=peer ya agregado en el VPS via wg set',
     ADD COLUMN IF NOT EXISTS `wg_registered_at` DATETIME NULL DEFAULT NULL
         COMMENT 'Fecha de primer registro WireGuard';
+
+
+-- =============================================================
+-- Peers manuales: PC, Android, iOS — creados desde el panel web
+-- IPs asignadas: 10.99.0.100–254 (para no colisionar con vending)
+-- =============================================================
+CREATE TABLE IF NOT EXISTS `wg_manual_peers` (
+    `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `label`          VARCHAR(255) NOT NULL COMMENT 'Nombre descriptivo del cliente',
+    `peer_type`      VARCHAR(20)  NOT NULL DEFAULT 'pc' COMMENT 'pc|android|ios|other',
+    `wireguard_ip`   VARCHAR(18)  NOT NULL COMMENT 'IP asignada en el túnel (10.99.0.x/32)',
+    `wg_public_key`  VARCHAR(64)  NOT NULL COMMENT 'Clave pública WireGuard del cliente',
+    `wg_peer_active` TINYINT      NOT NULL DEFAULT 0 COMMENT '1=peer sincronizado en el VPS',
+    `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_wg_ip`     (`wireguard_ip`),
+    UNIQUE KEY `uq_wg_pubkey` (`wg_public_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

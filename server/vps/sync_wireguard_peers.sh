@@ -36,7 +36,7 @@ PEERS=$(echo "$RESPONSE" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 for p in d.get('peers', []):
-    print(p['id'], p['device_ext_no'], p['wireguard_ip'], p['wg_public_key'])
+    print(p['id'], p.get('source','vending'), p['device_ext_no'], p['wireguard_ip'], p['wg_public_key'])
 " 2>/dev/null)
 
 if [ -z "$PEERS" ]; then
@@ -45,11 +45,11 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sincronizando peers WireGuard..."
 
-while read -r id device_ext_no wireguard_ip wg_public_key; do
+while read -r id source device_ext_no wireguard_ip wg_public_key; do
     # Quitar el /32 para el comando wg
     ip_bare="${wireguard_ip%/32}"
 
-    echo "  → Agregando peer: $device_ext_no | IP: $ip_bare | pubkey: ${wg_public_key:0:12}..."
+    echo "  → Agregando peer [$source]: $device_ext_no | IP: $ip_bare | pubkey: ${wg_public_key:0:12}..."
 
     # Agregar peer al servidor WireGuard
     wg set "$WG_IFACE" \
@@ -58,11 +58,11 @@ while read -r id device_ext_no wireguard_ip wg_public_key; do
         persistent-keepalive 25
 
     if [ $? -eq 0 ]; then
-        # Marcar como activo via API proxy
+        # Marcar como activo via API proxy (pasar source para actualizar la tabla correcta)
         curl -sf \
             -H "X-WG-Secret: $API_SECRET" \
             -H "Content-Type: application/json" \
-            -d "{\"action\":\"activate\",\"id\":$id}" \
+            -d "{\"action\":\"activate\",\"id\":$id,\"source\":\"$source\"}" \
             "$API_URL" > /dev/null
         echo "  ✅ $device_ext_no → $ip_bare activado"
     else

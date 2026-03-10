@@ -48,25 +48,51 @@ try {
 
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
 
-// ─── GET pending: peers listos para activar ───────────────────────────────────
+// ─── GET pending: peers listos para activar (vending + manuales) ─────────────
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'pending') {
-    $rows = $pdo->query("
-        SELECT id, device_ext_no, wireguard_ip, wg_public_key
+    // Peers de máquinas vending
+    $rowsVending = $pdo->query("
+        SELECT id, device_ext_no AS label, wireguard_ip, wg_public_key, 'vending' AS source
         FROM vending_machines
         WHERE wg_public_key  IS NOT NULL
           AND wireguard_ip   IS NOT NULL
           AND wg_peer_active = 0
     ")->fetchAll();
 
-    echo json_encode(['ok' => true, 'peers' => $rows]);
+    // Peers manuales (si la tabla existe)
+    $rowsManual = [];
+    try {
+        $rowsManual = $pdo->query("
+            SELECT id, label, wireguard_ip, wg_public_key, 'manual' AS source
+            FROM wg_manual_peers
+            WHERE wg_public_key IS NOT NULL
+              AND wireguard_ip  IS NOT NULL
+              AND wg_peer_active = 0
+        ")->fetchAll();
+    } catch (PDOException $e) {
+        // La tabla no existe todavía — ignorar
+    }
+
+    $peers = array_map(function($r) {
+        return [
+            'id'           => $r['id'],
+            'source'       => $r['source'],
+            'device_ext_no'=> $r['label'],
+            'wireguard_ip' => $r['wireguard_ip'],
+            'wg_public_key'=> $r['wg_public_key'],
+        ];
+    }, array_merge($rowsVending, $rowsManual));
+
+    echo json_encode(['ok' => true, 'peers' => $peers]);
     exit;
 }
 
 // ─── POST activate: marcar peer como activo ───────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'activate') {
-    $raw  = file_get_contents('php://input');
-    $data = json_decode($raw, true);
-    $id   = intval($data['id'] ?? 0);
+    $raw    = file_get_contents('php://input');
+    $data   = json_decode($raw, true);
+    $id     = intval($data['id']     ?? 0);
+    $source = $data['source'] ?? 'vending';   // 'vending' | 'manual'
 
     if (!$id) {
         http_response_code(400);
@@ -74,7 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'activate') {
         exit;
     }
 
-    $stmt = $pdo->prepare("UPDATE vending_machines SET wg_peer_active = 1 WHERE id = ?");
+    if ($source === 'manual') {
+        $stmt = $pdo->prepare("UPDATE wg_manual_peers SET wg_peer_active = 1 WHERE id = ?");
+    } else {
+        $stmt = $pdo->prepare("UPDATE vending_machines SET wg_peer_active = 1 WHERE id = ?");
+    }
     $stmt->execute([$id]);
 
     echo json_encode(['ok' => true, 'updated' => $stmt->rowCount()]);
