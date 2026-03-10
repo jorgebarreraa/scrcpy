@@ -2,7 +2,7 @@
 # =============================================================
 # sync_wireguard_peers.sh
 # Corre en el VPS WireGuard cada 1 minuto via cron.
-# Lee MySQL → busca peers con wg_peer_active=0 → ejecuta wg set
+# Llama al proxy PHP en el hosting via HTTPS (no accede a MySQL directo).
 #
 # INSTALACIÓN EN EL VPS:
 #   chmod +x sync_wireguard_peers.sh
@@ -12,20 +12,32 @@
 #   * * * * * /usr/local/bin/sync_wireguard_peers.sh >> /var/log/wg_sync.log 2>&1
 # =============================================================
 
-DB_HOST="powerboxchile.cl"   # MySQL remoto del hosting — confirmar hostname exacto en cPanel
-DB_NAME="powerboxchile_ips"
-DB_USER="powerboxchile_ips"
-DB_PASS='@Playstation9875!'
+API_URL="https://powerboxchile.cl/gateway-api/wg_sync_api.php"
+API_SECRET="pb_wg_s3cr3t_2026"   # debe coincidir con WG_API_SECRET en wg_sync_api.php
 WG_IFACE="wg0"
 
-# Obtener peers pendientes (wg_peer_active = 0, tienen public_key)
-PEERS=$(mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -N -e "
-    SELECT id, device_ext_no, wireguard_ip, wg_public_key
-    FROM vending_machines
-    WHERE wg_public_key IS NOT NULL
-      AND wireguard_ip IS NOT NULL
-      AND wg_peer_active = 0;
-")
+# Obtener peers pendientes (wg_peer_active = 0)
+RESPONSE=$(curl -sf \
+    -H "X-WG-Secret: $API_SECRET" \
+    "${API_URL}?action=pending")
+
+if [ $? -ne 0 ] || [ -z "$RESPONSE" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: No se pudo contactar el API proxy"
+    exit 1
+fi
+
+OK=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('ok','false'))" 2>/dev/null)
+if [ "$OK" != "True" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR API: $RESPONSE"
+    exit 1
+fi
+
+PEERS=$(echo "$RESPONSE" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+for p in d.get('peers', []):
+    print(p['id'], p['device_ext_no'], p['wireguard_ip'], p['wg_public_key'])
+" 2>/dev/null)
 
 if [ -z "$PEERS" ]; then
     exit 0  # nada que sincronizar
@@ -33,7 +45,7 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sincronizando peers WireGuard..."
 
-while IFS=$'\t' read -r id device_ext_no wireguard_ip wg_public_key; do
+while read -r id device_ext_no wireguard_ip wg_public_key; do
     # Quitar el /32 para el comando wg
     ip_bare="${wireguard_ip%/32}"
 
@@ -46,10 +58,12 @@ while IFS=$'\t' read -r id device_ext_no wireguard_ip wg_public_key; do
         persistent-keepalive 25
 
     if [ $? -eq 0 ]; then
-        # Marcar como activo en MySQL
-        mysql -h"$DB_HOST" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "
-            UPDATE vending_machines SET wg_peer_active = 1 WHERE id = $id;
-        "
+        # Marcar como activo via API proxy
+        curl -sf \
+            -H "X-WG-Secret: $API_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "{\"action\":\"activate\",\"id\":$id}" \
+            "$API_URL" > /dev/null
         echo "  ✅ $device_ext_no → $ip_bare activado"
     else
         echo "  ❌ Error agregando $device_ext_no"
