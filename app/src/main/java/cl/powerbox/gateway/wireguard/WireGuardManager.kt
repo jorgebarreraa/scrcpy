@@ -202,8 +202,8 @@ object WireGuardManager {
         val endpoint   = dao.getValue(KEY_WG_SERVER_ENDPOINT) ?: "—"
         val connected  = isConnected()
         return buildString {
-            appendLine("🔒 WireGuard")
-            appendLine("  Estado: ${if (connected) "🟢 CONECTADO" else if (registered) "🟡 REGISTRADO" else "🔴 SIN REGISTRAR"}")
+            appendLine("WireGuard")
+            appendLine("  Estado: ${if (connected) "CONECTADO" else if (registered) "REGISTRADO" else "SIN REGISTRAR"}")
             appendLine("  IP túnel: $ip")
             appendLine("  Servidor: $endpoint")
         }

@@ -5,15 +5,19 @@ import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.data.entity.CachedResponse
 import cl.powerbox.gateway.data.entity.PendingRequest
 import cl.powerbox.gateway.data.entity.ReplenishmentEvent
+import cl.powerbox.gateway.data.entity.TrafficLog
 import cl.powerbox.gateway.sync.OfflineTransactionSync
 import cl.powerbox.gateway.util.BroadcastHelper
+import cl.powerbox.gateway.util.DeviceRegistrar
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.NetworkMonitor
 import cl.powerbox.gateway.util.ServerConfig
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -93,33 +97,29 @@ class ProxyHandler(private val ctx: Context) {
         headers: Map<String, String>,
         body: ByteArray?
     ): ProxyResult {
+        val startTs = System.currentTimeMillis()
         return try {
             storeAuthHeaders(headers)
             storeDeviceId(body)
 
-            if (!NetworkMonitor.isOnline()) {
-                Logger.d("📍 Proxy: online=false ${method.uppercase()} $path")
-                return handleOffline(path, method, headers, body)
-            }
-
+            val online = NetworkMonitor.isOnline()
             val upper = method.uppercase()
 
-            Logger.d("🔧 Proxy: online=true $upper $path")
+            Logger.d("${if (online) "🔧" else "📍"} Proxy: online=$online $upper $path")
 
-            return if (upper == "POST" && isReplenishPost(path)) {
-                // Replicar a todos los destinos configurados
+            val shortPath = path.substringBefore("?").substringAfterLast("/").take(40)
+
+            val result = if (!online) {
+                Logger.d("📵 OFFLINE $upper /$shortPath")
+                handleOffline(path, method, headers, body)
+            } else if (upper == "POST" && isReplenishPost(path)) {
                 val results = forwardToAllOutputs(method, path, headers, body)
                 val primaryResult = results.firstOrNull()
-
                 if (primaryResult != null && primaryResult.code in 200..299) {
                     val affectedIds = applyReplenishmentLocally(path, body ?: ByteArray(0))
                     rewriteAllStockCachesWithEffectiveValues()
-
-                    if (affectedIds.isNotEmpty()) {
-                        BroadcastHelper.notifyStockChanged(ctx, affectedIds)
-                    }
+                    if (affectedIds.isNotEmpty()) BroadcastHelper.notifyStockChanged(ctx, affectedIds)
                 }
-
                 primaryResult?.let {
                     ProxyResult(it.code, "application/json", it.body?.bytes() ?: ByteArray(0))
                 } ?: ProxyResult(503, "application/json", """{"error":"No output destinations configured"}""".toByteArray())
@@ -127,11 +127,88 @@ class ProxyHandler(private val ctx: Context) {
                 handleOfflineOrForward(upper, path, headers, body)
             }
 
+            // Registrar dispositivo al interceptar deviceAllInfo (fire-and-forget)
+            if (path.contains("deviceAllInfo") && result.status in 200..299) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    DeviceRegistrar.registerFromDeviceAllInfo(ctx, result.body)
+                }
+            }
+
+            // Log visible en Event Log: resumen + detalle de params/body/respuesta
+            val elapsed = System.currentTimeMillis() - startTs
+            val statusIcon = if (result.status in 200..299) "✅" else "⚠️"
+            Logger.i("$statusIcon VENDING→GW $upper /$shortPath → HTTP ${result.status} (${elapsed}ms)")
+
+            // Detalle: query params
+            val queryPart = path.substringAfter("?", "")
+            if (queryPart.isNotEmpty()) {
+                Logger.i("   ↳ params: ?${queryPart.take(300)}")
+            }
+            // Detalle: request body (POST/PUT)
+            if (body != null && body.isNotEmpty()) {
+                val bodyPreview = String(body, Charsets.UTF_8).take(500)
+                Logger.i("   ↳ body: $bodyPreview")
+            }
+            // Detalle: response body preview
+            val respPreview = String(result.body, Charsets.UTF_8).take(400)
+            if (respPreview.length > 2) {
+                Logger.i("   ↳ resp: $respPreview")
+            }
+
+            // Registrar tráfico Vending → Gateway
+            logTraffic(
+                direction = "VENDING→GW",
+                method = upper,
+                path = path,
+                requestBody = body?.let { truncate(String(it, Charsets.UTF_8)) },
+                responseStatus = result.status,
+                responseBody = truncate(String(result.body, Charsets.UTF_8)),
+                durationMs = System.currentTimeMillis() - startTs,
+                isOnline = online
+            )
+
+            result
         } catch (e: Exception) {
             Logger.e("❌ ProxyHandler error", e)
             ProxyResult(500, "text/plain", "Error: ${e.message}".toByteArray())
         }
     }
+
+    private suspend fun logTraffic(
+        direction: String,
+        method: String,
+        path: String,
+        requestBody: String?,
+        responseStatus: Int,
+        responseBody: String?,
+        durationMs: Long,
+        isOnline: Boolean
+    ) {
+        try {
+            withContext(Dispatchers.IO) {
+                db.trafficLogDao().insert(
+                    TrafficLog(
+                        id = java.util.UUID.randomUUID().toString(),
+                        timestamp = System.currentTimeMillis(),
+                        direction = direction,
+                        method = method,
+                        path = path,
+                        requestBody = requestBody,
+                        responseStatus = responseStatus,
+                        responseBody = responseBody,
+                        durationMs = durationMs,
+                        isOnline = isOnline
+                    )
+                )
+                // Limpiar registros mayores a 3 días automáticamente
+                val threeDaysAgo = System.currentTimeMillis() - (3 * 24 * 60 * 60 * 1000L)
+                db.trafficLogDao().deleteOlderThan(threeDaysAgo)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun truncate(s: String, max: Int = 500): String =
+        if (s.length <= max) s else s.take(max) + "…"
 
     // ==================== MODO OFFLINE ====================
     private suspend fun handleOffline(path: String, method: String, headers: Map<String, String>, body: ByteArray?): ProxyResult {
@@ -273,9 +350,25 @@ class ProxyHandler(private val ctx: Context) {
 
         // Para lecturas (GET), usar la fuente de entrada configurada
         val inputUrl = ServerConfig.getInputSourceUrl(ctx)
+        val getStart = System.currentTimeMillis()
         val resp = tryForwardAndReturn(upper, path, headers, body, inputUrl)
         val bytes = resp.body?.bytes() ?: ByteArray(0)
         val contentType = resp.header("Content-Type") ?: "application/json"
+
+        // Log del reenvío al panel de entrada
+        val getDir = if (inputUrl.contains("powerbox", ignoreCase = true)) "GW→PB" else "GW→CJ"
+        val shortGetPath = path.substringBefore("?").substringAfterLast("/").take(40)
+        Logger.i("📡 $getDir $upper /$shortGetPath → HTTP ${resp.code}")
+        logTraffic(
+            direction = getDir,
+            method = upper,
+            path = path,
+            requestBody = body?.let { truncate(String(it, Charsets.UTF_8)) },
+            responseStatus = resp.code,
+            responseBody = if (contentType.contains("json", true)) truncate(String(bytes, Charsets.UTF_8)) else "[binary ${bytes.size}b]",
+            durationMs = System.currentTimeMillis() - getStart,
+            isOnline = true
+        )
 
         if (upper == "GET" && isStockListEndpoint(path) && contentType.contains("json", true)) {
             try {
@@ -342,10 +435,27 @@ class ProxyHandler(private val ctx: Context) {
         Logger.d("📤 Replicando ${method.uppercase()} $path a ${outputUrls.size} destino(s)")
 
         outputUrls.forEach { baseUrl ->
+            val fwdStart = System.currentTimeMillis()
             try {
                 val response = tryForwardAndReturn(method, path, headers, body, baseUrl)
                 results.add(response)
-                Logger.d("✅ Replicado a $baseUrl: ${response.code}")
+                val dest = if (baseUrl.contains("powerbox", ignoreCase = true)) "GW→PB" else "GW→CJ"
+                val shortP = path.substringBefore("?").substringAfterLast("/").take(40)
+                Logger.i("📤 $dest ${method.uppercase()} /$shortP → HTTP ${response.code}")
+
+                // Dirección: GW→CJ o GW→PB según la URL de destino
+                val dir = if (baseUrl.contains("powerbox", ignoreCase = true)) "GW→PB" else "GW→CJ"
+                val respBodyStr = try { response.peekBody(512).string() } catch (_: Throwable) { null }
+                logTraffic(
+                    direction = dir,
+                    method = method.uppercase(),
+                    path = path,
+                    requestBody = body?.let { truncate(String(it, Charsets.UTF_8)) },
+                    responseStatus = response.code,
+                    responseBody = respBodyStr?.let { truncate(it) },
+                    durationMs = System.currentTimeMillis() - fwdStart,
+                    isOnline = true
+                )
             } catch (e: Exception) {
                 Logger.e("❌ Error replicando a $baseUrl", e)
             }

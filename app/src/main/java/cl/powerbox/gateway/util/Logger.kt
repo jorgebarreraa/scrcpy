@@ -114,6 +114,7 @@ object Logger {
     fun exportLogs(ctx: Context): File? {
         try {
             val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+            dir.mkdirs()
             val exportFile = File(dir, "gateway_export_${System.currentTimeMillis()}.log")
 
             exportFile.writeText(buildString {

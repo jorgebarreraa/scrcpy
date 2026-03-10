@@ -17,7 +17,6 @@ import cl.powerbox.gateway.wireguard.WireGuardManager
 import cl.powerbox.gateway.worker.CleanupWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class GatewayForegroundService : Service() {
@@ -62,7 +61,6 @@ class GatewayForegroundService : Service() {
 
     private var netWatcher: NetWatcher? = null
     private val main = Handler(Looper.getMainLooper())
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -94,20 +92,18 @@ class GatewayForegroundService : Service() {
             // Programar limpieza
             CleanupWorker.schedule(applicationContext)
 
-            // Iniciar NetWatcher para detectar cuando vuelva internet
-            netWatcher = NetWatcher(applicationContext) {
-                Logger.d("NetWatcher: volvió internet → kick Sync + WireGuard")
-                SyncScheduler.syncNow(applicationContext)
-                // Reintentar registro WireGuard cuando vuelva internet
-                serviceScope.launch { WireGuardManager.setup(applicationContext) }
-            }.also { it.start() }
-
-            // Iniciar WireGuard en background (no bloquea el servicio)
-            serviceScope.launch {
+            // Iniciar túnel WireGuard
+            CoroutineScope(Dispatchers.IO).launch {
                 WireGuardManager.setup(applicationContext)
             }
 
-            Logger.d("✅ Gateway service initialized (HTTP server already running from Application)")
+            // Iniciar NetWatcher para detectar cuando vuelva internet
+            netWatcher = NetWatcher(applicationContext) {
+                Logger.d("NetWatcher: volvió internet → kick Sync")
+                SyncScheduler.syncNow(applicationContext)
+            }.also { it.start() }
+
+            Logger.i("🌐 Gateway activo - escuchando en 127.0.0.1:9090")
 
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(NOTIF_ID, buildNotification("Servidor activo en 127.0.0.1:9090"))
@@ -123,8 +119,9 @@ class GatewayForegroundService : Service() {
     override fun onDestroy() {
         try { netWatcher?.stop() } catch (_: Throwable) {}
         netWatcher = null
-
-        serviceScope.launch { WireGuardManager.stop() }
+        CoroutineScope(Dispatchers.IO).launch {
+            try { WireGuardManager.stop() } catch (_: Throwable) {}
+        }
 
         setRunning(this, false)
         super.onDestroy()

@@ -15,13 +15,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     
+    <!-- Permiso para túnel VPN WireGuard -->
+    <uses-permission android:name="android.permission.BIND_VPN_SERVICE" />
+
     <!-- Permisos para auto-actualización -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-
-    <!-- WireGuard VPN -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name=".GatewayApplication"
@@ -67,16 +67,6 @@
             android:name=".service.GatewayForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync|connectedDevice" />
-
-        <!-- WireGuard VPN Service (requerido por Android VPN API) -->
-        <service
-            android:name="com.wireguard.android.backend.GoBackend$VpnService"
-            android:exported="false"
-            android:permission="android.permission.BIND_VPN_SERVICE">
-            <intent-filter>
-                <action android:name="android.net.VpnService" />
-            </intent-filter>
-        </service>
 
         <!-- Arranque en boot (TU VERSIÓN) -->
         <receiver

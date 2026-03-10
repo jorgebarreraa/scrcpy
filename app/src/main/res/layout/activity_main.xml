@@ -35,127 +35,153 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
 
-        <!-- CONFIGURACIÓN DE PANELES Y BOTONES -->
+        <!-- BOTONES DE CONTROL EN FILA HORIZONTAL -->
         <LinearLayout
             android:orientation="horizontal"
             android:gravity="center"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp">
+            android:layout_marginBottom="4dp">
 
-            <!-- CONEXIÓN ENTRANTE (Izquierda) -->
-            <LinearLayout
-                android:orientation="vertical"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"
-                android:paddingEnd="8dp"
-                android:paddingStart="4dp">
+            <Button
+                android:id="@+id/btnStart"
+                android:text="Iniciar"
+                android:textSize="13sp"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="#4CAF50"
+                android:layout_width="110dp"
+                android:layout_height="44dp" />
 
-                <TextView
-                    android:text="📥 Entrada (GET)"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:textColor="#667eea"
-                    android:gravity="center"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp" />
+            <Button
+                android:id="@+id/btnStop"
+                android:text="Detener"
+                android:textSize="13sp"
+                android:layout_marginEnd="8dp"
+                android:backgroundTint="#F44336"
+                android:layout_width="110dp"
+                android:layout_height="44dp" />
 
-                <RadioGroup
-                    android:id="@+id/rgInputSource"
-                    android:orientation="vertical"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
+            <Button
+                android:id="@+id/btnCheckUpdate"
+                android:text="Actualizar"
+                android:textSize="13sp"
+                android:backgroundTint="#2196F3"
+                android:layout_width="110dp"
+                android:layout_height="44dp" />
 
-                    <RadioButton
-                        android:id="@+id/rbInputPanel1"
-                        android:text="CoffeeJi"
-                        android:textSize="10sp"
-                        android:checked="true"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingTop="2dp"
-                        android:paddingBottom="2dp" />
-
-                    <RadioButton
-                        android:id="@+id/rbInputPanel2"
-                        android:text="Powerbox"
-                        android:textSize="10sp"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingTop="2dp"
-                        android:paddingBottom="2dp" />
-                </RadioGroup>
-            </LinearLayout>
-
-            <!-- BOTONES DE CONTROL (Centro) -->
-            <LinearLayout
-                android:orientation="vertical"
-                android:gravity="center"
+            <TextView
+                android:id="@+id/tvDeviceExtNo"
+                android:text=""
+                android:textSize="12sp"
+                android:textColor="#607D8B"
+                android:layout_marginStart="12dp"
+                android:gravity="center_vertical"
                 android:layout_width="wrap_content"
+                android:layout_height="44dp" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- SEPARATOR -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0" />
+
+    <!-- CONFIGURACIÓN DE PANELES: ENTRANTE + SALIENTE -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- CONEXIÓN ENTRANTE (Panel de Origen) -->
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:background="#F1F8F1">
+
+            <TextView
+                android:text="📥 Conexión Entrante (Panel de Origen)"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="#2E7D32"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp">
+                android:layout_marginBottom="8dp" />
 
-                <Button
-                    android:id="@+id/btnStart"
-                    android:text="Iniciar"
-                    android:textSize="13sp"
-                    android:layout_marginBottom="6dp"
-                    android:backgroundTint="#4CAF50"
-                    android:layout_width="110dp"
-                    android:layout_height="40dp" />
-
-                <Button
-                    android:id="@+id/btnStop"
-                    android:text="Detener"
-                    android:textSize="13sp"
-                    android:backgroundTint="#F44336"
-                    android:layout_width="110dp"
-                    android:layout_height="40dp" />
-            </LinearLayout>
-
-            <!-- CONEXIÓN SALIENTE (Derecha) -->
-            <LinearLayout
+            <RadioGroup
+                android:id="@+id/rgInputSource"
                 android:orientation="vertical"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="4dp">
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
 
-                <TextView
-                    android:text="📤 Salida (POST)"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:textColor="#667eea"
-                    android:gravity="center"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp" />
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swOutputPanel1"
-                    android:text="CoffeeJi"
+                <RadioButton
+                    android:id="@+id/rbInputPanel1"
+                    android:text="Panel 1 (https://gsvden.coffeeji.com)"
                     android:textSize="10sp"
                     android:checked="true"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:paddingTop="2dp"
-                    android:paddingBottom="2dp" />
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp" />
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/swOutputPanel2"
-                    android:text="Powerbox"
+                <RadioButton
+                    android:id="@+id/rbInputPanel2"
+                    android:text="Panel 2 (https://maquinas.powerboxchile.cl)"
                     android:textSize="10sp"
-                    android:checked="false"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:paddingTop="2dp"
-                    android:paddingBottom="2dp" />
-            </LinearLayout>
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- DIVISOR VERTICAL -->
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="#E0E0E0" />
+
+        <!-- CONEXIÓN SALIENTE (Panel que obtiene datos) -->
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:padding="12dp"
+            android:background="#EBF3FB">
+
+            <TextView
+                android:text="📤 Conexión Saliente (Panel que obtiene datos)"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:textColor="#1565C0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/swOutputPanel1"
+                android:text="Panel 1 (https://gsvden.coffeeji.com)"
+                android:textSize="10sp"
+                android:checked="true"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/swOutputPanel2"
+                android:text="Panel 2 (https://maquinas.powerboxchile.cl)"
+                android:textSize="10sp"
+                android:checked="false"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
         </LinearLayout>
     </LinearLayout>
 
@@ -170,8 +196,8 @@
         android:orientation="vertical"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
         android:background="#FAFAFA"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
@@ -180,8 +206,7 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="2dp">
+            android:layout_height="wrap_content">
 
             <TextView
                 android:text="⚙️ Diagnóstico"
@@ -310,7 +335,7 @@
 
         <TextView
             android:id="@+id/tvVersion"
-            android:text="Powerbox Gateway v2.0"
+            android:text="Powerbox Gateway v2.5"
             android:textSize="10sp"
             android:textColor="#757575"
             android:textStyle="italic"

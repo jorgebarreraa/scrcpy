@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  *   device_ext_no  → machine_number visible (ej: "E00731")
  *   device_name    → nickname / nombre de la máquina
  *
- * POST /api/wireguard/register
+ * POST /gateway-api/register_wireguard.php
  * Body: { device_no, device_ext_no, device_name, public_key }
  * Response: { wireguard_ip, server_public_key, server_endpoint, dns }
  */
@@ -49,15 +49,14 @@ object WireGuardRegistrationClient {
         registerUrl: String,
         request: RegistrationRequest
     ): RegistrationResponse? {
-        val url  = registerUrl   // https://maquinas.powerboxchile.cl/gateway-api/register_wireguard.php
         val json = mapper.writeValueAsString(request)
         val body = json.toRequestBody("application/json".toMediaType())
 
-        Logger.d("[WG] POST $url | device=${request.device_ext_no} (${request.device_no.take(8)}...)")
+        Logger.d("[WG] POST $registerUrl | device=${request.device_ext_no} (${request.device_no.take(8)}...)")
 
         return try {
             val response = client.newCall(
-                Request.Builder().url(url).post(body).build()
+                Request.Builder().url(registerUrl).post(body).build()
             ).execute()
 
             val bodyStr = response.body?.string() ?: ""
