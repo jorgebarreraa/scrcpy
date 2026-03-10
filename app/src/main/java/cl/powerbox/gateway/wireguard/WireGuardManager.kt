@@ -38,7 +38,7 @@ object WireGuardManager {
     private const val KEY_WG_DNS              = "wg_dns"
     private const val KEY_WG_REGISTERED       = "wg_registered"
     // URL fija del endpoint de registro (mismo hosting que register_device.php)
-    private const val WG_REGISTER_URL = "https://maquinas.powerboxchile.cl/gateway-api/register_wireguard.php"
+    private const val WG_REGISTER_URL = "https://powerboxchile.cl/gateway-api/register_wireguard.php"
     const val KEY_WG_SERVER_BASE_URL  = "wg_server_base_url" // ya no se usa para registro, solo para referencia
 
     private const val TUNNEL_NAME = "powerbox0"
