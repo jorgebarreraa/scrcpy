@@ -12,7 +12,7 @@
 #   * * * * * /usr/local/bin/sync_wireguard_peers.sh >> /var/log/wg_sync.log 2>&1
 # =============================================================
 
-DB_HOST="localhost"
+DB_HOST="powerboxchile.cl"   # MySQL remoto del hosting — confirmar hostname exacto en cPanel
 DB_NAME="powerboxchile_ips"
 DB_USER="powerboxchile_ips"
 DB_PASS='@Playstation9875!'
