@@ -220,26 +220,29 @@ object WireGuardManager {
     }
 
     /** Usa root para conceder permiso VPN sin interacción del usuario.
-     *  Prueba varias sintaxis para compatibilidad con distintas versiones de Android. */
+     *  Pasa el comando por stdin de su (compatible con dispositivos donde su no soporta -c). */
     private fun ensureVpnPermissionViaRoot(ctx: Context) {
-        // Si ya tiene permiso, no hacer nada
         if (AndroidVpnService.prepare(ctx) == null) {
             Logger.d("[WG] Permiso VPN ya concedido")
             return
         }
 
         val pkg = ctx.packageName
-        // Intentar múltiples comandos para distintas versiones de Android
+        // Variantes del comando appops para distintas versiones de Android
         val cmds = listOf(
             "appops set $pkg ACTIVATE_VPN allow",
             "appops set --user 0 $pkg ACTIVATE_VPN allow",
-            "appops set $pkg android:activate_vpn allow",
-            "appops set $pkg 47 1"  // 47 = ACTIVATE_VPN en algunas versiones
+            "appops set $pkg 47 1"
         )
 
         for (cmd in cmds) {
             try {
-                val proc = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+                // Pasar el comando por stdin (compatible con su sin flag -c)
+                val proc = Runtime.getRuntime().exec("su")
+                proc.outputStream.bufferedWriter().use { w ->
+                    w.write("$cmd\n")
+                    w.write("exit\n")
+                }
                 val exit = proc.waitFor()
                 val err = proc.errorStream.bufferedReader().readText().trim()
                 Logger.d("[WG] '$cmd' → exit=$exit err=${err.ifEmpty { "ok" }}")
