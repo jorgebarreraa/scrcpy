@@ -33,18 +33,14 @@ CREATE TABLE IF NOT EXISTS `vending_machines` (
 
 
 -- =============================================================
--- Si la tabla ya existe (BD en producción), solo agregar columnas
--- Ejecutar este bloque por separado si vending_machines ya tiene datos
+-- Si la tabla ya existe (BD en producción), agregar columnas WireGuard
+-- Ejecutar cada ALTER por separado; ignorar el error si la columna ya existe
+-- Compatible con MySQL 5.7+
 -- =============================================================
-ALTER TABLE `vending_machines`
-    ADD COLUMN IF NOT EXISTS `wireguard_ip`     VARCHAR(18) NULL DEFAULT NULL
-        COMMENT 'IP asignada túnel WireGuard (10.99.0.x/32)',
-    ADD COLUMN IF NOT EXISTS `wg_public_key`    VARCHAR(64) NULL DEFAULT NULL
-        COMMENT 'Clave pública WireGuard del dispositivo',
-    ADD COLUMN IF NOT EXISTS `wg_peer_active`   TINYINT NOT NULL DEFAULT 0
-        COMMENT '1=peer ya agregado en el VPS via wg set',
-    ADD COLUMN IF NOT EXISTS `wg_registered_at` DATETIME NULL DEFAULT NULL
-        COMMENT 'Fecha de primer registro WireGuard';
+ALTER TABLE `vending_machines` ADD COLUMN `wireguard_ip`     VARCHAR(18) NULL DEFAULT NULL COMMENT 'IP asignada túnel WireGuard (10.99.0.x/32)';
+ALTER TABLE `vending_machines` ADD COLUMN `wg_public_key`    VARCHAR(64) NULL DEFAULT NULL COMMENT 'Clave pública WireGuard del dispositivo';
+ALTER TABLE `vending_machines` ADD COLUMN `wg_peer_active`   TINYINT NOT NULL DEFAULT 0 COMMENT '1=peer ya agregado en el VPS via wg set';
+ALTER TABLE `vending_machines` ADD COLUMN `wg_registered_at` DATETIME NULL DEFAULT NULL COMMENT 'Fecha de primer registro WireGuard';
 
 
 -- =============================================================
