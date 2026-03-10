@@ -574,7 +574,7 @@ function renderVending(peers) {
       <td>${shortKey(p.wg_public_key)}</td>
       <td>${statusBadge(p.wg_peer_active == 1)}</td>
       <td class="text-end pe-3">
-        <button class="btn btn-sm btn-outline-secondary" onclick="viewVendingConf(${JSON.stringify(p)})">
+        <button class="btn btn-sm btn-outline-secondary" onclick="viewVendingConf(JSON.parse(this.dataset.peer))" data-peer="${escHtml(JSON.stringify(p))}">
           <i class="bi bi-eye me-1"></i>Config
         </button>
       </td>
