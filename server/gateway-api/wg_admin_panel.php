@@ -6,7 +6,6 @@
  * URL: /gateway-api/wg_admin_panel.php
  * Contraseña por defecto: Powerbox@2026
  */
-
 // ─── Configuración ────────────────────────────────────────────────────────────
 define('PANEL_PASSWORD',     'Powerbox@2026');
 define('DB_HOST',            'localhost');
@@ -21,9 +20,7 @@ define('WG_SUBNET_BASE',     '10.99.0');
 define('WG_SUBNET_START',    100);   // 2–99 reservados para vending machines
 define('WG_SUBNET_END',      254);
 // ─────────────────────────────────────────────────────────────────────────────
-
 session_start();
-
 // ─── API JSON ─────────────────────────────────────────────────────────────────
 $api = $_GET['api'] ?? '';
 if ($api) {
@@ -45,7 +42,6 @@ if ($api) {
     }
     exit;
 }
-
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     if ($_POST['password'] === PANEL_PASSWORD) {
@@ -59,7 +55,6 @@ if (isset($_POST['logout'])) {
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function requireAuth(): void {
     if (empty($_SESSION['wg_auth'])) {
@@ -68,7 +63,6 @@ function requireAuth(): void {
         exit;
     }
 }
-
 function getDb(): PDO {
     $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
     return new PDO($dsn, DB_USER, DB_PASS, [
@@ -76,7 +70,6 @@ function getDb(): PDO {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 }
-
 function initManualPeersTable(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS `wg_manual_peers` (
         `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -91,7 +84,6 @@ function initManualPeersTable(PDO $pdo): void {
         UNIQUE KEY `uq_pubkey` (`wg_public_key`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
-
 function apiListPeers(PDO $pdo): void {
     $vending = $pdo->query("
         SELECT
@@ -106,7 +98,6 @@ function apiListPeers(PDO $pdo): void {
         WHERE wg_public_key IS NOT NULL
         ORDER BY device_ext_no
     ")->fetchAll();
-
     initManualPeersTable($pdo);
     $manual = $pdo->query("
         SELECT
@@ -121,20 +112,16 @@ function apiListPeers(PDO $pdo): void {
         FROM wg_manual_peers
         ORDER BY created_at DESC
     ")->fetchAll();
-
     echo json_encode(['ok' => true, 'vending' => $vending, 'manual' => $manual]);
 }
-
 function apiNextIp(PDO $pdo): void {
     $usedVm = $pdo->query(
         "SELECT wireguard_ip FROM vending_machines WHERE wireguard_ip IS NOT NULL"
     )->fetchAll(PDO::FETCH_COLUMN);
-
     initManualPeersTable($pdo);
     $usedMp = $pdo->query(
         "SELECT wireguard_ip FROM wg_manual_peers"
     )->fetchAll(PDO::FETCH_COLUMN);
-
     $used = array_merge($usedVm, $usedMp);
     for ($i = WG_SUBNET_START; $i <= WG_SUBNET_END; $i++) {
         $candidate = WG_SUBNET_BASE . '.' . $i . '/32';
@@ -146,14 +133,12 @@ function apiNextIp(PDO $pdo): void {
     http_response_code(503);
     echo json_encode(['ok' => false, 'error' => 'Sin IPs disponibles en el pool WireGuard']);
 }
-
 function apiCreatePeer(PDO $pdo): void {
     $data      = json_decode(file_get_contents('php://input'), true) ?? [];
     $label     = trim($data['label']      ?? '');
     $type      = trim($data['type']       ?? 'pc');
     $publicKey = trim($data['public_key'] ?? '');
     $ip        = trim($data['ip']         ?? '');
-
     if (!$label || !$publicKey || !$ip) {
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => 'Faltan campos: label, public_key, ip']);
@@ -169,7 +154,6 @@ function apiCreatePeer(PDO $pdo): void {
         echo json_encode(['ok' => false, 'error' => 'IP fuera del rango permitido (10.99.0.2–254/32)']);
         return;
     }
-
     initManualPeersTable($pdo);
     try {
         $stmt = $pdo->prepare("
@@ -183,7 +167,6 @@ function apiCreatePeer(PDO $pdo): void {
         echo json_encode(['ok' => false, 'error' => 'IP o clave pública ya registrada']);
     }
 }
-
 function apiDeletePeer(PDO $pdo): void {
     $data = json_decode(file_get_contents('php://input'), true) ?? [];
     $id   = intval($data['id'] ?? 0);
@@ -220,6 +203,7 @@ function apiDeletePeer(PDO $pdo): void {
   .conf-box { font-family: monospace; font-size: 12px; background: #1e1e2e; color: #cdd6f4;
               border-radius: 8px; padding: 14px; white-space: pre; overflow-x: auto; }
   .table th { font-size: 12px; text-transform: uppercase; color: #6c757d; }
+  .table td { vertical-align: middle; }
   #loginCard { max-width: 380px; margin: 120px auto; }
   .ip-badge { font-family: monospace; font-size: 12px; }
   .pubkey-short { font-family: monospace; font-size: 11px; color: #6c757d; }
@@ -229,7 +213,6 @@ function apiDeletePeer(PDO $pdo): void {
 </style>
 </head>
 <body>
-
 <?php if (empty($_SESSION['wg_auth'])): ?>
 <!-- ═══════════════════════════════ LOGIN ═══════════════════════════════════ -->
 <div class="container">
@@ -250,10 +233,8 @@ function apiDeletePeer(PDO $pdo): void {
     </form>
   </div>
 </div>
-
 <?php else: ?>
 <!-- ══════════════════════════════ PANEL ════════════════════════════════════ -->
-
 <!-- Navbar -->
 <nav class="navbar navbar-dark bg-dark px-3">
   <span class="navbar-brand"><i class="bi bi-shield-lock-fill me-2"></i>Powerbox WireGuard</span>
@@ -266,9 +247,7 @@ function apiDeletePeer(PDO $pdo): void {
     </form>
   </div>
 </nav>
-
 <div class="container-fluid py-4 px-4">
-
   <!-- Info cards -->
   <div class="row g-3 mb-4">
     <div class="col-md-4">
@@ -309,7 +288,6 @@ function apiDeletePeer(PDO $pdo): void {
       </div>
     </div>
   </div>
-
   <!-- Botón nuevo peer -->
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0"><i class="bi bi-people-fill me-2"></i>Peers registrados</h5>
@@ -317,7 +295,6 @@ function apiDeletePeer(PDO $pdo): void {
       <i class="bi bi-plus-circle me-1"></i> Nuevo peer
     </button>
   </div>
-
   <!-- Tabla peers manuales -->
   <div class="card mb-4">
     <div class="card-header bg-white fw-semibold py-2">
@@ -342,7 +319,6 @@ function apiDeletePeer(PDO $pdo): void {
       </table>
     </div>
   </div>
-
   <!-- Tabla vending machines -->
   <div class="card">
     <div class="card-header bg-white fw-semibold py-2">
@@ -365,7 +341,6 @@ function apiDeletePeer(PDO $pdo): void {
       </table>
     </div>
   </div>
-
   <!-- Descargas: WireGuard -->
   <div class="card mt-4">
     <div class="card-header bg-white fw-semibold py-2">
@@ -375,9 +350,9 @@ function apiDeletePeer(PDO $pdo): void {
       <table class="table table-hover mb-0">
         <thead class="table-light">
           <tr>
-            <th class="ps-3">Plataforma</th>
-            <th>Descripción</th>
-            <th class="text-end pe-3">Descarga</th>
+            <th class="ps-3" style="width:20%">Plataforma</th>
+            <th style="width:55%">Descripción</th>
+            <th class="text-end pe-3" style="width:25%">Descarga</th>
           </tr>
         </thead>
         <tbody>
@@ -415,7 +390,6 @@ function apiDeletePeer(PDO $pdo): void {
       </table>
     </div>
   </div>
-
   <!-- Descargas: scrcpy -->
   <div class="card mt-4 mb-4">
     <div class="card-header bg-white fw-semibold py-2">
@@ -425,9 +399,9 @@ function apiDeletePeer(PDO $pdo): void {
       <table class="table table-hover mb-0">
         <thead class="table-light">
           <tr>
-            <th class="ps-3">Plataforma</th>
-            <th>Descripción</th>
-            <th class="text-end pe-3">Descarga</th>
+            <th class="ps-3" style="width:20%">Plataforma</th>
+            <th style="width:55%">Descripción</th>
+            <th class="text-end pe-3" style="width:25%">Descarga</th>
           </tr>
         </thead>
         <tbody>
@@ -435,9 +409,12 @@ function apiDeletePeer(PDO $pdo): void {
             <td class="ps-3"><i class="bi bi-windows me-1 text-primary"></i> <strong>Windows</strong></td>
             <td><small class="text-muted">Control remoto de pantalla Android desde PC (sin root)</small></td>
             <td class="text-end pe-3">
-              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
+              <a href="https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-win32-v3.3.4.zip"
                  class="btn btn-sm btn-outline-primary" target="_blank">
-                <i class="bi bi-download me-1"></i> Descargar
+                <i class="bi bi-download me-1"></i> Descargar x32
+              </a>&nbsp;&nbsp;<a href="https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-win64-v3.3.4.zip"
+                 class="btn btn-sm btn-outline-primary" target="_blank">
+                <i class="bi bi-download me-1"></i> Descargar x64
               </a>
             </td>
           </tr>
@@ -445,9 +422,12 @@ function apiDeletePeer(PDO $pdo): void {
             <td class="ps-3"><i class="bi bi-terminal me-1 text-warning"></i> <strong>macOS</strong></td>
             <td><small class="text-muted">Disponible en GitHub releases o via Homebrew (<code>brew install scrcpy</code>)</small></td>
             <td class="text-end pe-3">
-              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
+              <a href="https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-macos-x86_64-v3.3.4.tar.gz"
                  class="btn btn-sm btn-outline-secondary" target="_blank">
-                <i class="bi bi-download me-1"></i> Descargar
+                <i class="bi bi-download me-1"></i> Descargar x86/x64
+              </a>&nbsp;&nbsp;<a href="https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-macos-aarch64-v3.3.4.tar.gz"
+                 class="btn btn-sm btn-outline-secondary" target="_blank">
+                <i class="bi bi-download me-1"></i> Descargar Aarch64
               </a>
             </td>
           </tr>
@@ -455,9 +435,9 @@ function apiDeletePeer(PDO $pdo): void {
             <td class="ps-3"><i class="bi bi-ubuntu me-1 text-danger"></i> <strong>Linux</strong></td>
             <td><small class="text-muted">Disponible en GitHub releases o via gestor de paquetes (<code>apt install scrcpy</code>)</small></td>
             <td class="text-end pe-3">
-              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
+              <a href="https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-linux-x86_64-v3.3.4.tar.gz"
                  class="btn btn-sm btn-outline-danger" target="_blank">
-                <i class="bi bi-download me-1"></i> Descargar
+                <i class="bi bi-download me-1"></i> Descargar x86/x64
               </a>
             </td>
           </tr>
@@ -465,9 +445,7 @@ function apiDeletePeer(PDO $pdo): void {
       </table>
     </div>
   </div>
-
 </div><!-- /container -->
-
 <!-- ══════════════════ MODAL: Nuevo peer ════════════════════════════════════ -->
 <div class="modal fade" id="modalNewPeer" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -477,7 +455,6 @@ function apiDeletePeer(PDO $pdo): void {
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-
         <!-- Paso 1: datos -->
         <div id="step1">
           <div class="row g-3">
@@ -502,14 +479,12 @@ function apiDeletePeer(PDO $pdo): void {
               </select>
             </div>
           </div>
-
           <div class="alert alert-info mt-3 py-2 mb-0">
             <i class="bi bi-info-circle me-1"></i>
             Las claves se generan <strong>localmente en tu navegador</strong>. La clave privada
             <strong>nunca se envía al servidor</strong>. Solo la clave pública y la IP se guardan en la BD.
           </div>
         </div>
-
         <!-- Paso 2: config generada -->
         <div id="step2" class="d-none">
           <div class="row g-3">
@@ -532,7 +507,6 @@ function apiDeletePeer(PDO $pdo): void {
             El peer estará activo en el servidor en menos de 60 segundos.
           </div>
         </div>
-
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -549,7 +523,6 @@ function apiDeletePeer(PDO $pdo): void {
     </div>
   </div>
 </div>
-
 <!-- ══════════════════ MODAL: Ver config vending ════════════════════════════ -->
 <div class="modal fade" id="modalViewConf" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -575,7 +548,6 @@ function apiDeletePeer(PDO $pdo): void {
     </div>
   </div>
 </div>
-
 <!-- Spinner overlay -->
 <div class="spinner-overlay" id="spinner">
   <div class="text-center text-white">
@@ -583,39 +555,32 @@ function apiDeletePeer(PDO $pdo): void {
     <div>Procesando…</div>
   </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- TweetNaCl — genera claves Curve25519 (X25519) compatibles con WireGuard -->
 <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tweetnacl-util@0.15.1/nacl-util.min.js"></script>
-
 <script>
 // ─── Constantes servidor ──────────────────────────────────────────────────────
 const WG_SERVER_PUBKEY   = <?= json_encode(WG_SERVER_PUBKEY) ?>;
 const WG_SERVER_ENDPOINT = <?= json_encode(WG_SERVER_ENDPOINT) ?>;
 const WG_DNS             = <?= json_encode(WG_DNS) ?>;
-
 // Estado del peer actual
 let currentPeer = null;
 let viewConfData = null;
-
 // ─── Inicialización ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', loadPeers);
-
 // ─── Cargar tabla ─────────────────────────────────────────────────────────────
 async function loadPeers() {
   try {
     const r = await fetch('?api=list_peers');
     const d = await r.json();
     if (!d.ok) return;
-
     renderManual(d.manual);
     renderVending(d.vending);
   } catch(e) {
     console.error(e);
   }
 }
-
 function peerTypeBadge(t) {
   const map = {
     vending: '<span class="badge badge-vending">Vending</span>',
@@ -626,18 +591,15 @@ function peerTypeBadge(t) {
   };
   return map[t] || map.other;
 }
-
 function statusBadge(active) {
   return active
     ? '<span class="badge badge-active">✅ Activo</span>'
     : '<span class="badge badge-pending">⏳ Pendiente</span>';
 }
-
 function shortKey(k) {
   if (!k) return '—';
   return `<span class="pubkey-short" title="${k}">${k.substring(0,12)}…${k.slice(-6)}</span>`;
 }
-
 function renderManual(peers) {
   const tbody = document.getElementById('bodyManual');
   if (!peers.length) {
@@ -660,7 +622,6 @@ function renderManual(peers) {
     </tr>
   `).join('');
 }
-
 function renderVending(peers) {
   const tbody = document.getElementById('bodyVending');
   if (!peers.length) {
@@ -681,14 +642,12 @@ function renderVending(peers) {
     </tr>
   `).join('');
 }
-
 // ─── Generar keypair en el navegador ─────────────────────────────────────────
 function genKeypair() {
   const kp = nacl.box.keyPair();
   const toB64 = b => btoa(String.fromCharCode(...b));
   return { private: toB64(kp.secretKey), public: toB64(kp.publicKey) };
 }
-
 // ─── Construir archivo .conf ──────────────────────────────────────────────────
 function buildConf(label, privateKey, ip, allowedIps) {
   const ipClean = ip.replace('/32', '');
@@ -697,14 +656,12 @@ function buildConf(label, privateKey, ip, allowedIps) {
 PrivateKey = ${privateKey}
 Address = ${ipClean}/32
 DNS = ${WG_DNS}
-
 [Peer]
 PublicKey = ${WG_SERVER_PUBKEY}
 Endpoint = ${WG_SERVER_ENDPOINT}
 AllowedIPs = ${allowedIps}
 PersistentKeepalive = 25`;
 }
-
 // ─── Abrir modal nuevo peer ───────────────────────────────────────────────────
 function openNewPeerModal() {
   currentPeer = null;
@@ -718,28 +675,22 @@ function openNewPeerModal() {
   document.getElementById('btnSave').classList.add('d-none');
   new bootstrap.Modal(document.getElementById('modalNewPeer')).show();
 }
-
 // ─── Paso 1: generar keypair + obtener IP ────────────────────────────────────
 async function generatePeer() {
   const label = document.getElementById('peerLabel').value.trim();
   if (!label) { alert('Ingresa un nombre para el peer'); return; }
-
   showSpinner(true);
   try {
     const ipResp = await fetch('?api=next_ip');
     const ipData = await ipResp.json();
     if (!ipData.ok) { alert('Error: ' + ipData.error); return; }
-
     const kp         = genKeypair();
     const allowedIps = document.getElementById('peerAllowedIps').value;
     const conf       = buildConf(label, kp.private, ipData.ip, allowedIps);
-
     currentPeer = { label, type: document.getElementById('peerType').value, kp, ip: ipData.ip, conf };
-
     document.getElementById('showIp').value     = ipData.ip;
     document.getElementById('showPubKey').value = kp.public;
     document.getElementById('confPreview').textContent = conf;
-
     document.getElementById('step1').classList.add('d-none');
     document.getElementById('step2').classList.remove('d-none');
     document.getElementById('btnGenerate').classList.add('d-none');
@@ -751,14 +702,12 @@ async function generatePeer() {
     showSpinner(false);
   }
 }
-
 // ─── Descargar .conf ──────────────────────────────────────────────────────────
 function downloadConf() {
   if (!currentPeer) return;
   const filename = currentPeer.label.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_wg.conf';
   triggerDownload(currentPeer.conf, filename);
 }
-
 // ─── Guardar peer en servidor ─────────────────────────────────────────────────
 async function savePeer() {
   if (!currentPeer) return;
@@ -788,7 +737,6 @@ async function savePeer() {
     showSpinner(false);
   }
 }
-
 // ─── Eliminar peer ────────────────────────────────────────────────────────────
 async function deletePeer(id, label) {
   if (!confirm(`¿Eliminar el peer "${label}"?\nEl peer seguirá en el servidor WireGuard hasta el próximo reinicio.`)) return;
@@ -806,7 +754,6 @@ async function deletePeer(id, label) {
     showSpinner(false);
   }
 }
-
 // ─── Ver config vending (sin clave privada) ───────────────────────────────────
 function viewVendingConf(peer) {
   const ipClean = (peer.wireguard_ip || '').replace('/32', '');
@@ -815,25 +762,21 @@ function viewVendingConf(peer) {
 PrivateKey = <PRIVADA_DEL_DISPOSITIVO>
 Address = ${ipClean}/32
 DNS = ${WG_DNS}
-
 [Peer]
 PublicKey = ${WG_SERVER_PUBKEY}
 Endpoint = ${WG_SERVER_ENDPOINT}
 AllowedIPs = 10.99.0.0/24
 PersistentKeepalive = 25`;
-
   document.getElementById('confTitle').textContent = peer.label;
   document.getElementById('viewConfPreview').textContent = conf;
   viewConfData = { conf, label: peer.label };
   new bootstrap.Modal(document.getElementById('modalViewConf')).show();
 }
-
 function downloadViewConf() {
   if (!viewConfData) return;
   const filename = viewConfData.label.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_ref.conf';
   triggerDownload(viewConfData.conf, filename);
 }
-
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 function triggerDownload(content, filename) {
   const a = document.createElement('a');
@@ -841,15 +784,12 @@ function triggerDownload(content, filename) {
   a.download = filename;
   a.click();
 }
-
 function escHtml(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
 function showSpinner(v) {
   document.getElementById('spinner').classList.toggle('show', v);
 }
-
 function showToast(msg) {
   const t = document.createElement('div');
   t.className = 'position-fixed bottom-0 end-0 m-3 alert alert-success shadow';
@@ -858,7 +798,6 @@ function showToast(msg) {
   setTimeout(() => t.remove(), 4000);
 }
 </script>
-
 <?php endif; ?>
 </body>
 </html>
