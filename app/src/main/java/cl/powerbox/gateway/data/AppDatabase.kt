@@ -17,9 +17,10 @@ import cl.powerbox.gateway.data.entity.*
         ReplenishmentEvent::class,
         MachineConfig::class,
         StockState::class,
-        OfflineTransaction::class  // Added new entity for offline transaction tracking
+        OfflineTransaction::class,
+        TrafficLog::class
     ],
-    version = 2,  // Incremented from 1 to 2 to force schema migration after annotation changes
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,7 +33,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun replenishmentEventDao(): ReplenishmentEventDao
     abstract fun machineConfigDao(): MachineConfigDao
     abstract fun stockStateDao(): StockStateDao
-    abstract fun offlineTransactionDao(): OfflineTransactionDao  // Added DAO accessor
+    abstract fun offlineTransactionDao(): OfflineTransactionDao
+    abstract fun trafficLogDao(): TrafficLogDao
 
     // ✅ Alias para consistencia
     fun pendingRequestDao() = pendingDao()
