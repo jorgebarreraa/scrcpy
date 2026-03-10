@@ -29,6 +29,8 @@ import cl.powerbox.gateway.data.dao.StockMasterDao;
 import cl.powerbox.gateway.data.dao.StockMasterDao_Impl;
 import cl.powerbox.gateway.data.dao.StockStateDao;
 import cl.powerbox.gateway.data.dao.StockStateDao_Impl;
+import cl.powerbox.gateway.data.dao.TrafficLogDao;
+import cl.powerbox.gateway.data.dao.TrafficLogDao_Impl;
 import java.lang.Class;
 import java.lang.Override;
 import java.lang.String;
@@ -62,10 +64,12 @@ public final class AppDatabase_Impl extends AppDatabase {
 
   private volatile OfflineTransactionDao _offlineTransactionDao;
 
+  private volatile TrafficLogDao _trafficLogDao;
+
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(2) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(3) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `cached_response` (`key` TEXT NOT NULL, `path` TEXT NOT NULL, `method` TEXT NOT NULL, `bodyHash` TEXT NOT NULL, `contentType` TEXT NOT NULL, `bytes` BLOB NOT NULL, `cachedAt` INTEGER NOT NULL, `lastHitAt` INTEGER NOT NULL, PRIMARY KEY(`key`))");
@@ -77,8 +81,9 @@ public final class AppDatabase_Impl extends AppDatabase {
         db.execSQL("CREATE TABLE IF NOT EXISTS `machine_config` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`key`))");
         db.execSQL("CREATE TABLE IF NOT EXISTS `stock_state` (`productId` TEXT NOT NULL, `serverQty` INTEGER NOT NULL, `localDelta` INTEGER NOT NULL, `lastSync` INTEGER NOT NULL, PRIMARY KEY(`productId`))");
         db.execSQL("CREATE TABLE IF NOT EXISTS `offline_transactions` (`id` TEXT NOT NULL, `deviceId` TEXT NOT NULL, `materialId` TEXT NOT NULL, `replenishQt` INTEGER NOT NULL, `operationType` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `synced` INTEGER NOT NULL, `syncedAt` INTEGER, PRIMARY KEY(`id`))");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `traffic_log` (`id` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `direction` TEXT NOT NULL, `method` TEXT NOT NULL, `path` TEXT NOT NULL, `requestBody` TEXT, `responseStatus` INTEGER NOT NULL, `responseBody` TEXT, `durationMs` INTEGER NOT NULL, `isOnline` INTEGER NOT NULL, PRIMARY KEY(`id`))");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ded5c002200bc62ffd2823bad366810c')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8c04e45de3243e46df7bb3b39996528e')");
       }
 
       @Override
@@ -92,6 +97,7 @@ public final class AppDatabase_Impl extends AppDatabase {
         db.execSQL("DROP TABLE IF EXISTS `machine_config`");
         db.execSQL("DROP TABLE IF EXISTS `stock_state`");
         db.execSQL("DROP TABLE IF EXISTS `offline_transactions`");
+        db.execSQL("DROP TABLE IF EXISTS `traffic_log`");
         final List<? extends RoomDatabase.Callback> _callbacks = mCallbacks;
         if (_callbacks != null) {
           for (RoomDatabase.Callback _callback : _callbacks) {
@@ -276,9 +282,29 @@ public final class AppDatabase_Impl extends AppDatabase {
                   + " Expected:\n" + _infoOfflineTransactions + "\n"
                   + " Found:\n" + _existingOfflineTransactions);
         }
+        final HashMap<String, TableInfo.Column> _columnsTrafficLog = new HashMap<String, TableInfo.Column>(10);
+        _columnsTrafficLog.put("id", new TableInfo.Column("id", "TEXT", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("timestamp", new TableInfo.Column("timestamp", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("direction", new TableInfo.Column("direction", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("method", new TableInfo.Column("method", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("path", new TableInfo.Column("path", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("requestBody", new TableInfo.Column("requestBody", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("responseStatus", new TableInfo.Column("responseStatus", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("responseBody", new TableInfo.Column("responseBody", "TEXT", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("durationMs", new TableInfo.Column("durationMs", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsTrafficLog.put("isOnline", new TableInfo.Column("isOnline", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        final HashSet<TableInfo.ForeignKey> _foreignKeysTrafficLog = new HashSet<TableInfo.ForeignKey>(0);
+        final HashSet<TableInfo.Index> _indicesTrafficLog = new HashSet<TableInfo.Index>(0);
+        final TableInfo _infoTrafficLog = new TableInfo("traffic_log", _columnsTrafficLog, _foreignKeysTrafficLog, _indicesTrafficLog);
+        final TableInfo _existingTrafficLog = TableInfo.read(db, "traffic_log");
+        if (!_infoTrafficLog.equals(_existingTrafficLog)) {
+          return new RoomOpenHelper.ValidationResult(false, "traffic_log(cl.powerbox.gateway.data.entity.TrafficLog).\n"
+                  + " Expected:\n" + _infoTrafficLog + "\n"
+                  + " Found:\n" + _existingTrafficLog);
+        }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "ded5c002200bc62ffd2823bad366810c", "cb044f2892c6d46d8cd1fb1640a49e3e");
+    }, "8c04e45de3243e46df7bb3b39996528e", "8aa2373c23502636decf9a60cfa35a88");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;
@@ -289,7 +315,7 @@ public final class AppDatabase_Impl extends AppDatabase {
   protected InvalidationTracker createInvalidationTracker() {
     final HashMap<String, String> _shadowTablesMap = new HashMap<String, String>(0);
     final HashMap<String, Set<String>> _viewTables = new HashMap<String, Set<String>>(0);
-    return new InvalidationTracker(this, _shadowTablesMap, _viewTables, "cached_response","pending_requests","product","stock_master","sale_event","replenishment_events","machine_config","stock_state","offline_transactions");
+    return new InvalidationTracker(this, _shadowTablesMap, _viewTables, "cached_response","pending_requests","product","stock_master","sale_event","replenishment_events","machine_config","stock_state","offline_transactions","traffic_log");
   }
 
   @Override
@@ -307,6 +333,7 @@ public final class AppDatabase_Impl extends AppDatabase {
       _db.execSQL("DELETE FROM `machine_config`");
       _db.execSQL("DELETE FROM `stock_state`");
       _db.execSQL("DELETE FROM `offline_transactions`");
+      _db.execSQL("DELETE FROM `traffic_log`");
       super.setTransactionSuccessful();
     } finally {
       super.endTransaction();
@@ -330,6 +357,7 @@ public final class AppDatabase_Impl extends AppDatabase {
     _typeConvertersMap.put(MachineConfigDao.class, MachineConfigDao_Impl.getRequiredConverters());
     _typeConvertersMap.put(StockStateDao.class, StockStateDao_Impl.getRequiredConverters());
     _typeConvertersMap.put(OfflineTransactionDao.class, OfflineTransactionDao_Impl.getRequiredConverters());
+    _typeConvertersMap.put(TrafficLogDao.class, TrafficLogDao_Impl.getRequiredConverters());
     return _typeConvertersMap;
   }
 
@@ -470,6 +498,20 @@ public final class AppDatabase_Impl extends AppDatabase {
           _offlineTransactionDao = new OfflineTransactionDao_Impl(this);
         }
         return _offlineTransactionDao;
+      }
+    }
+  }
+
+  @Override
+  public TrafficLogDao trafficLogDao() {
+    if (_trafficLogDao != null) {
+      return _trafficLogDao;
+    } else {
+      synchronized(this) {
+        if(_trafficLogDao == null) {
+          _trafficLogDao = new TrafficLogDao_Impl(this);
+        }
+        return _trafficLogDao;
       }
     }
   }

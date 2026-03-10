@@ -3,10 +3,8 @@ package cl.powerbox.gateway.sync
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import cl.powerbox.gateway.data.AppDatabase
 import cl.powerbox.gateway.util.Logger
 import cl.powerbox.gateway.util.ServerConfig
-import cl.powerbox.gateway.wireguard.WireGuardManager
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -45,12 +43,7 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
             .readTimeout(10, TimeUnit.SECONDS)
             .build()
 
-        // Incluir estado WireGuard en el heartbeat
-        val dao         = AppDatabase.get(ctx).machineConfigDao()
-        val wgIp        = dao.getValue(WireGuardManager.KEY_WG_ASSIGNED_IP) ?: ""
-        val wgConnected = WireGuardManager.isConnected()
-        val bodyJson    = """{"wg_ip":"$wgIp","wg_connected":$wgConnected}"""
-        val body        = bodyJson.toRequestBody("application/json".toMediaType())
+        val body = "{}".toRequestBody("application/json".toMediaType())
 
         outputUrls.forEach { baseUrl ->
             val url = "$baseUrl/api/coffee/api/device/heartbeat"

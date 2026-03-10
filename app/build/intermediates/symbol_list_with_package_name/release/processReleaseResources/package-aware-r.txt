@@ -3100,11 +3100,11 @@ id beginning
 id blocking
 id bottom
 id bounce
+id btnCheckUpdate
 id btnClearLogs
 id btnExportLogs
 id btnStart
 id btnStop
-id btnUpdate
 id buttonPanel
 id cancel_button
 id center
@@ -3341,9 +3341,12 @@ id progress_circular
 id progress_horizontal
 id radio
 id ratio
+id rbInputPanel1
+id rbInputPanel2
 id rectangles
 id report_drawn
 id reverseSawtooth
+id rgInputSource
 id right
 id rightToLeft
 id right_icon
@@ -3406,6 +3409,8 @@ id stop
 id stretch
 id submenuarrow
 id submit_area
+id swOutputPanel1
+id swOutputPanel2
 id tabMode
 id tag_accessibility_actions
 id tag_accessibility_clickable_spans
@@ -3455,8 +3460,11 @@ id transition_position
 id transition_scene_layoutid_cache
 id transition_transform
 id triangle
+id tvConfigSummary
+id tvDeviceExtNo
 id tvLogCount
 id tvLogs
+id tvPendingCount
 id tvStatus
 id tvVersion
 id unchecked
