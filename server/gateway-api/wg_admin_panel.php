@@ -343,73 +343,6 @@ function apiDeletePeer(PDO $pdo): void {
     </div>
   </div>
 
-  <!-- Sección de descargas -->
-  <div class="card mb-4">
-    <div class="card-header bg-white fw-semibold py-2">
-      <i class="bi bi-download me-1"></i> Descargas — Programas requeridos
-    </div>
-    <div class="card-body p-0">
-      <table class="table table-hover mb-0">
-        <thead class="table-light">
-          <tr>
-            <th class="ps-3">Programa</th>
-            <th>Descripción</th>
-            <th><i class="bi bi-windows me-1"></i> Windows</th>
-            <th><i class="bi bi-android2 me-1"></i> Android</th>
-            <th><i class="bi bi-apple me-1"></i> macOS / iOS</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="ps-3">
-              <span class="fw-semibold"><i class="bi bi-shield-lock me-1 text-primary"></i> WireGuard</span>
-            </td>
-            <td><small class="text-muted">Cliente VPN para conectarse a la red Powerbox</small></td>
-            <td>
-              <a href="https://download.wireguard.com/windows-client/wireguard-installer.exe"
-                 class="btn btn-sm btn-outline-primary" target="_blank">
-                <i class="bi bi-download me-1"></i> Descargar
-              </a>
-            </td>
-            <td>
-              <a href="https://play.google.com/store/apps/details?id=com.wireguard.android"
-                 class="btn btn-sm btn-outline-success" target="_blank">
-                <i class="bi bi-google-play me-1"></i> Play Store
-              </a>
-            </td>
-            <td>
-              <a href="https://apps.apple.com/app/wireguard/id1441195209"
-                 class="btn btn-sm btn-outline-secondary" target="_blank">
-                <i class="bi bi-apple me-1"></i> App Store
-              </a>
-            </td>
-          </tr>
-          <tr>
-            <td class="ps-3">
-              <span class="fw-semibold"><i class="bi bi-phone me-1 text-success"></i> scrcpy</span>
-            </td>
-            <td><small class="text-muted">Control remoto de pantalla Android desde PC</small></td>
-            <td>
-              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
-                 class="btn btn-sm btn-outline-primary" target="_blank">
-                <i class="bi bi-download me-1"></i> Descargar
-              </a>
-            </td>
-            <td>
-              <small class="text-muted fst-italic">Se controla desde PC</small>
-            </td>
-            <td>
-              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
-                 class="btn btn-sm btn-outline-secondary" target="_blank">
-                <i class="bi bi-download me-1"></i> Descargar
-              </a>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
   <!-- Tabla vending machines -->
   <div class="card">
     <div class="card-header bg-white fw-semibold py-2">
@@ -428,6 +361,106 @@ function apiDeletePeer(PDO $pdo): void {
         </thead>
         <tbody id="bodyVending">
           <tr><td colspan="5" class="text-center py-3 text-muted">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Descargas: WireGuard -->
+  <div class="card mt-4">
+    <div class="card-header bg-white fw-semibold py-2">
+      <i class="bi bi-shield-lock me-1 text-primary"></i> Descargar WireGuard
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Plataforma</th>
+            <th>Descripción</th>
+            <th class="text-end pe-3">Descarga</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ps-3"><i class="bi bi-windows me-1 text-primary"></i> <strong>Windows</strong></td>
+            <td><small class="text-muted">Instalador oficial para Windows 7/8/10/11</small></td>
+            <td class="text-end pe-3">
+              <a href="https://download.wireguard.com/windows-client/wireguard-installer.exe"
+                 class="btn btn-sm btn-outline-primary" target="_blank">
+                <i class="bi bi-download me-1"></i> Descargar .exe
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td class="ps-3"><i class="bi bi-android2 me-1 text-success"></i> <strong>Android</strong></td>
+            <td><small class="text-muted">Aplicación oficial desde Google Play Store</small></td>
+            <td class="text-end pe-3">
+              <a href="https://play.google.com/store/apps/details?id=com.wireguard.android"
+                 class="btn btn-sm btn-outline-success" target="_blank">
+                <i class="bi bi-google-play me-1"></i> Play Store
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td class="ps-3"><i class="bi bi-apple me-1"></i> <strong>iPhone / iPad / macOS</strong></td>
+            <td><small class="text-muted">Aplicación oficial desde Apple App Store</small></td>
+            <td class="text-end pe-3">
+              <a href="https://apps.apple.com/app/wireguard/id1441195209"
+                 class="btn btn-sm btn-outline-secondary" target="_blank">
+                <i class="bi bi-apple me-1"></i> App Store
+              </a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Descargas: scrcpy -->
+  <div class="card mt-4 mb-4">
+    <div class="card-header bg-white fw-semibold py-2">
+      <i class="bi bi-phone me-1 text-success"></i> Descargar scrcpy
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">Plataforma</th>
+            <th>Descripción</th>
+            <th class="text-end pe-3">Descarga</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ps-3"><i class="bi bi-windows me-1 text-primary"></i> <strong>Windows</strong></td>
+            <td><small class="text-muted">Control remoto de pantalla Android desde PC (sin root)</small></td>
+            <td class="text-end pe-3">
+              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
+                 class="btn btn-sm btn-outline-primary" target="_blank">
+                <i class="bi bi-download me-1"></i> Descargar
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td class="ps-3"><i class="bi bi-terminal me-1 text-warning"></i> <strong>macOS</strong></td>
+            <td><small class="text-muted">Disponible en GitHub releases o via Homebrew (<code>brew install scrcpy</code>)</small></td>
+            <td class="text-end pe-3">
+              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
+                 class="btn btn-sm btn-outline-secondary" target="_blank">
+                <i class="bi bi-download me-1"></i> Descargar
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td class="ps-3"><i class="bi bi-ubuntu me-1 text-danger"></i> <strong>Linux</strong></td>
+            <td><small class="text-muted">Disponible en GitHub releases o via gestor de paquetes (<code>apt install scrcpy</code>)</small></td>
+            <td class="text-end pe-3">
+              <a href="https://github.com/Genymobile/scrcpy/releases/latest"
+                 class="btn btn-sm btn-outline-danger" target="_blank">
+                <i class="bi bi-download me-1"></i> Descargar
+              </a>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
