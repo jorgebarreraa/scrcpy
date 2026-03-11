@@ -30,14 +30,24 @@ const wss = new WebSocket.Server({ server });
 
 // ─── Conexión WebSocket ───────────────────────────────────────────────────────
 wss.on('connection', (ws, req) => {
-    const params    = new url.URLSearchParams((req.url || '').split('?')[1] || '');
+    // Debug: mostrar URL exacta que llega (ayuda a diagnosticar proxies nginx)
+    console.log(`[scrcpy-ws] req.url = "${req.url}"`);
+
+    // Parsear query string robustamente (soporta /path?k=v y ?k=v)
+    let params;
+    try {
+        params = new url.URL(req.url, 'http://localhost').searchParams;
+    } catch (_) {
+        params = new url.URLSearchParams((req.url || '').split('?')[1] || '');
+    }
+
     const device    = params.get('device');   // IP de la vending, ej: 10.99.0.2
     const widthReq  = parseInt(params.get('w') || '720',  10);
     const heightReq = parseInt(params.get('h') || '1280', 10);
 
     // Validar IP
     if (!device || !ALLOWED_SUBNET.test(device)) {
-        console.warn(`[scrcpy-ws] IP rechazada: ${device}`);
+        console.warn(`[scrcpy-ws] IP rechazada: "${device}" (req.url="${req.url}")`);
         ws.close(1008, 'IP no permitida');
         return;
     }
