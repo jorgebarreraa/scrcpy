@@ -904,9 +904,10 @@ async function openRemoteDesktop(wgIpRaw, label) {
 
   // JSMpeg crea su propio WebSocket internamente
   remotePlayer = new JSMpeg.Player(wsUrl, {
-    canvas:   canvas,
-    autoplay: true,
-    audio:    false,
+    canvas:    canvas,
+    autoplay:  true,
+    audio:     false,
+    disableGl: true,
     onSourceEstablished: () => {
       document.getElementById('remoteStatus').textContent = '● En vivo';
       document.getElementById('remoteStatus').className   = 'badge bg-success';
