@@ -497,6 +497,18 @@ function apiDeletePeer(PDO $pdo): void {
             <button class="btn btn-sm btn-outline-secondary w-100 mt-1" onclick="sendKey(26)" title="Sleep">
               <i class="bi bi-moon-fill"></i> Sleep
             </button>
+            <button class="btn btn-sm btn-outline-danger w-100 mt-1" onclick="sendCommand('reboot')" title="Reiniciar dispositivo">
+              <i class="bi bi-arrow-repeat"></i> Reboot
+            </button>
+          </div>
+          <div class="screen-toolbar flex-column">
+            <small class="text-muted mb-1 text-uppercase" style="font-size:10px">Barras</small>
+            <button class="btn btn-sm btn-outline-info w-100" onclick="sendCommand('show_bars')" title="Mostrar barras del sistema">
+              <i class="bi bi-layout-sidebar-inset"></i> Mostrar Barras
+            </button>
+            <button class="btn btn-sm btn-outline-info w-100 mt-1" onclick="sendCommand('hide_bars')" title="Ocultar barras del sistema">
+              <i class="bi bi-fullscreen"></i> Ocultar Barras
+            </button>
           </div>
           <div class="screen-toolbar flex-column">
             <small class="text-muted mb-1 text-uppercase" style="font-size:10px">Volumen</small>
@@ -973,6 +985,11 @@ function setupCanvasInput(canvas, androidW, androidH) {
 function sendKey(keycode) {
   if (!screenPlayer?.source?.socket) return;
   screenPlayer.source.socket.send(JSON.stringify({ type: 'key', keycode }));
+}
+
+function sendCommand(cmd) {
+  if (!screenPlayer?.source?.socket) return;
+  screenPlayer.source.socket.send(JSON.stringify({ type: 'command', cmd }));
 }
 
 // ─── Utilidades ───────────────────────────────────────────────────────────────

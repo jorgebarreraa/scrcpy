@@ -139,6 +139,15 @@ wss.on('connection', (ws, req) => {
 
             } else if (ev.type === 'text') {
                 spawn(ADB, ['-s', s, 'shell', 'input', 'text', ev.value]);
+
+            } else if (ev.type === 'command') {
+                if (ev.cmd === 'reboot') {
+                    spawn(ADB, ['-s', s, 'shell', 'reboot']);
+                } else if (ev.cmd === 'show_bars') {
+                    spawn(ADB, ['-s', s, 'shell', 'settings', 'put', 'global', 'policy_control', 'null']);
+                } else if (ev.cmd === 'hide_bars') {
+                    spawn(ADB, ['-s', s, 'shell', 'settings', 'put', 'global', 'policy_control', 'immersive.full=*']);
+                }
             }
         } catch (e) {
             console.error('[scrcpy-ws] mensaje inválido:', e.message);
