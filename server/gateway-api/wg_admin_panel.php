@@ -210,7 +210,16 @@ function apiDeletePeer(PDO $pdo): void {
   .spinner-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4);
                      z-index:9999; align-items:center; justify-content:center; }
   .spinner-overlay.show { display:flex; }
+  /* ── Visor de pantalla Android ── */
+  #screenCanvas { display:block; width:100%; background:#000; border-radius:8px;
+                  cursor:crosshair; touch-action:none; }
+  .screen-toolbar { background:#1e1e2e; border-radius:8px; padding:8px 12px;
+                    display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .screen-toolbar .btn { font-size:12px; }
+  #screenStatus { font-size:11px; }
+  .modal-fullscreen-lg { max-width:95vw; width:95vw; }
 </style>
+<script src="https://jsmpeg.com/jsmpeg.min.js"></script>
 </head>
 <body>
 <?php if (empty($_SESSION['wg_auth'])): ?>
@@ -332,7 +341,7 @@ function apiDeletePeer(PDO $pdo): void {
             <th>IP Túnel</th>
             <th>Clave Pública</th>
             <th>Estado</th>
-            <th class="text-end pe-3">Config</th>
+            <th class="text-end pe-3">Acciones</th>
           </tr>
         </thead>
         <tbody id="bodyVending">
@@ -446,6 +455,76 @@ function apiDeletePeer(PDO $pdo): void {
     </div>
   </div>
 </div><!-- /container -->
+<!-- ══════════════════ MODAL: Visor de pantalla Android ════════════════════ -->
+<div class="modal fade" id="modalScreen" tabindex="-1">
+  <div class="modal-dialog modal-fullscreen-lg modal-dialog-centered">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header border-secondary py-2">
+        <h6 class="modal-title mb-0">
+          <i class="bi bi-display me-2"></i>
+          <span id="screenDeviceName">—</span>
+          <small class="ms-2 text-muted font-monospace" id="screenDeviceIp"></small>
+        </h6>
+        <div class="d-flex align-items-center gap-2 ms-3">
+          <span id="screenStatus" class="badge bg-warning">Conectando…</span>
+        </div>
+        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-2 d-flex gap-2" style="background:#111">
+        <!-- Canvas del stream de video -->
+        <div class="flex-grow-1 d-flex align-items-center justify-content-center" style="min-height:400px">
+          <canvas id="screenCanvas"></canvas>
+        </div>
+        <!-- Barra lateral de controles -->
+        <div class="d-flex flex-column gap-2" style="min-width:110px">
+          <div class="screen-toolbar flex-column">
+            <small class="text-muted mb-1 text-uppercase" style="font-size:10px">Navegación</small>
+            <button class="btn btn-sm btn-outline-light w-100" onclick="sendKey(3)" title="Inicio">
+              <i class="bi bi-house-fill"></i> Home
+            </button>
+            <button class="btn btn-sm btn-outline-light w-100 mt-1" onclick="sendKey(4)" title="Atrás">
+              <i class="bi bi-arrow-left"></i> Back
+            </button>
+            <button class="btn btn-sm btn-outline-light w-100 mt-1" onclick="sendKey(187)" title="Recientes">
+              <i class="bi bi-grid"></i> Recientes
+            </button>
+          </div>
+          <div class="screen-toolbar flex-column">
+            <small class="text-muted mb-1 text-uppercase" style="font-size:10px">Pantalla</small>
+            <button class="btn btn-sm btn-outline-warning w-100" onclick="sendKey(224)" title="Encender pantalla">
+              <i class="bi bi-sun-fill"></i> Wake
+            </button>
+            <button class="btn btn-sm btn-outline-secondary w-100 mt-1" onclick="sendKey(26)" title="Sleep">
+              <i class="bi bi-moon-fill"></i> Sleep
+            </button>
+          </div>
+          <div class="screen-toolbar flex-column">
+            <small class="text-muted mb-1 text-uppercase" style="font-size:10px">Volumen</small>
+            <button class="btn btn-sm btn-outline-light w-100" onclick="sendKey(24)">
+              <i class="bi bi-volume-up-fill"></i> Vol +
+            </button>
+            <button class="btn btn-sm btn-outline-light w-100 mt-1" onclick="sendKey(25)">
+              <i class="bi bi-volume-down-fill"></i> Vol −
+            </button>
+          </div>
+          <div class="mt-auto">
+            <small class="text-muted d-block mb-1" style="font-size:10px">FPS / Calidad</small>
+            <select id="screenQuality" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="reconnectStream()">
+              <option value="960x540">540p · Rápido</option>
+              <option value="1280x720" selected>720p · Normal</option>
+              <option value="1920x1080">1080p · HD</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary py-1">
+        <small class="text-muted me-auto" id="screenInfo">—</small>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════ MODAL: Nuevo peer ════════════════════════════════════ -->
 <div class="modal fade" id="modalNewPeer" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -635,8 +714,11 @@ function renderVending(peers) {
       <td>${shortKey(p.wg_public_key)}</td>
       <td>${statusBadge(p.wg_peer_active == 1)}</td>
       <td class="text-end pe-3">
-        <button class="btn btn-sm btn-outline-secondary" onclick="viewVendingConf(JSON.parse(this.dataset.peer))" data-peer="${escHtml(JSON.stringify(p))}">
-          <i class="bi bi-eye me-1"></i>Config
+        <button class="btn btn-sm btn-outline-secondary me-1" onclick="viewVendingConf(JSON.parse(this.dataset.peer))" data-peer="${escHtml(JSON.stringify(p))}">
+          <i class="bi bi-file-code me-1"></i>Config
+        </button>
+        <button class="btn btn-sm btn-outline-dark" onclick="openScreenViewer(JSON.parse(this.dataset.peer))" data-peer="${escHtml(JSON.stringify(p))}">
+          <i class="bi bi-display me-1"></i>Pantalla
         </button>
       </td>
     </tr>
@@ -777,6 +859,121 @@ function downloadViewConf() {
   const filename = viewConfData.label.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_ref.conf';
   triggerDownload(viewConfData.conf, filename);
 }
+// ─── Visor de pantalla Android (JSMpeg + WebSocket) ──────────────────────────
+let screenWs      = null;
+let screenPlayer  = null;
+let screenDevice  = null;   // { label, wireguard_ip }
+
+function openScreenViewer(peer) {
+  screenDevice = peer;
+  const ip = (peer.wireguard_ip || '').replace('/32', '');
+  document.getElementById('screenDeviceName').textContent = peer.label;
+  document.getElementById('screenDeviceIp').textContent   = ip;
+  document.getElementById('screenStatus').textContent     = 'Conectando…';
+  document.getElementById('screenStatus').className       = 'badge bg-warning';
+  document.getElementById('screenInfo').textContent       = '—';
+  new bootstrap.Modal(document.getElementById('modalScreen')).show();
+  connectStream(ip);
+}
+
+function connectStream(ip) {
+  // Limpiar conexión previa
+  if (screenWs) { screenWs.close(); screenWs = null; }
+  if (screenPlayer) { screenPlayer.destroy(); screenPlayer = null; }
+
+  const quality = document.getElementById('screenQuality').value;
+  const [w, h]  = quality.split('x');
+  const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl   = `${wsProto}://${location.host}/scrcpy-ws/?device=${ip}&w=${w}&h=${h}`;
+
+  const canvas  = document.getElementById('screenCanvas');
+
+  // JSMpeg — decodificador MPEG1 en canvas
+  screenPlayer = new JSMpeg.Player(wsUrl, {
+    canvas:          canvas,
+    autoplay:        true,
+    audio:           false,
+    loop:            false,
+    preserveDrawingBuffer: false,
+    onSourceEstablished: () => {
+      document.getElementById('screenStatus').textContent = '🟢 En vivo';
+      document.getElementById('screenStatus').className  = 'badge bg-success';
+      document.getElementById('screenInfo').textContent  =
+        `${screenDevice.label} · ${quality} · WebSocket`;
+      setupCanvasInput(canvas, parseInt(w), parseInt(h));
+    },
+    onSourceCompleted: () => {
+      document.getElementById('screenStatus').textContent = '🔴 Desconectado';
+      document.getElementById('screenStatus').className  = 'badge bg-danger';
+    }
+  });
+}
+
+function reconnectStream() {
+  if (!screenDevice) return;
+  const ip = (screenDevice.wireguard_ip || '').replace('/32', '');
+  document.getElementById('screenStatus').textContent = 'Reconectando…';
+  document.getElementById('screenStatus').className  = 'badge bg-warning';
+  connectStream(ip);
+}
+
+// Cerrar stream al cerrar el modal
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('modalScreen').addEventListener('hidden.bs.modal', () => {
+    if (screenPlayer) { screenPlayer.destroy(); screenPlayer = null; }
+    if (screenWs)     { screenWs.close(); screenWs = null; }
+    screenDevice = null;
+  });
+});
+
+// ─── Enviar touch desde el canvas al Android ──────────────────────────────────
+function setupCanvasInput(canvas, androidW, androidH) {
+  // Convertir coordenadas canvas → coordenadas reales del Android
+  function toAndroid(clientX, clientY) {
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = androidW / rect.width;
+    const scaleY = androidH / rect.height;
+    return {
+      x: Math.round((clientX - rect.left) * scaleX),
+      y: Math.round((clientY - rect.top)  * scaleY)
+    };
+  }
+
+  let dragStart = null;
+
+  canvas.onmousedown = e => {
+    dragStart = toAndroid(e.clientX, e.clientY);
+  };
+
+  canvas.onmouseup = e => {
+    if (!screenPlayer || !screenPlayer.source) return;
+    const pos = toAndroid(e.clientX, e.clientY);
+    const dx  = Math.abs(pos.x - (dragStart?.x || pos.x));
+    const dy  = Math.abs(pos.y - (dragStart?.y || pos.y));
+
+    if (dx < 10 && dy < 10) {
+      // Tap
+      screenPlayer.source.socket.send(JSON.stringify({ type: 'tap', x: pos.x, y: pos.y }));
+    } else if (dragStart) {
+      // Swipe
+      screenPlayer.source.socket.send(JSON.stringify({
+        type: 'swipe',
+        x1: dragStart.x, y1: dragStart.y,
+        x2: pos.x,       y2: pos.y,
+        duration: 300
+      }));
+    }
+    dragStart = null;
+  };
+
+  canvas.oncontextmenu = e => { e.preventDefault(); };
+}
+
+function sendKey(keycode) {
+  if (!screenPlayer?.source?.socket) return;
+  screenPlayer.source.socket.send(JSON.stringify({ type: 'key', keycode }));
+}
+
 // ─── Utilidades ───────────────────────────────────────────────────────────────
 function triggerDownload(content, filename) {
   const a = document.createElement('a');

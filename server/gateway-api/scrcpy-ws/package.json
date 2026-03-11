@@ -1,0 +1,12 @@
+{
+  "name": "scrcpy-ws",
+  "version": "1.0.0",
+  "description": "WebSocket bridge for Android screen streaming via ADB",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
