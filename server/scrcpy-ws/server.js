@@ -59,7 +59,6 @@ function startStream(ws, target) {
         '--serial',        target,
         '--no-display',
         '--video-codec=h264',
-        '--video-encoder=OMX.google.h264.encoder',
         '--record=-',
         '--record-format=mkv',
         '--bit-rate=2M',
