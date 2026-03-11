@@ -1,96 +1,163 @@
 /**
- * scrcpy-ws  –  Servidor WebSocket multi-máquina
- * ------------------------------------------------
- * Recibe conexiones WebSocket del browser con un parámetro ?device=<IP_WG>
- * y ejecuta: adb connect → scrcpy --video-codec=h264 → ffmpeg → stream binario
+ * scrcpy-ws — WebSocket bridge para streaming de pantalla Android
+ * Powerbox Vending Machine Network
  *
- * Requisitos en el VPS:
- *   apt install nodejs npm adb ffmpeg
- *   npm install ws
- *
- * Arrancar:
- *   node server.js
- * O como servicio (ver scrcpy-ws.service)
+ * Protocolo:
+ *   Server → Client : chunks binarios MPEG-TS (video MPEG1)
+ *   Client → Server : JSON { type: 'tap'|'swipe'|'key', ... }
  */
 
-const { WebSocketServer, WebSocket } = require('ws');
-const { spawn, execSync }            = require('child_process');
+const WebSocket = require('ws');
+const { spawn }  = require('child_process');
+const http       = require('http');
+const url        = require('url');
 
-const PORT             = 3001;
-const ADB_CONNECT_WAIT = 3000; // ms para esperar que adb conecte
+const PORT       = 3001;
+const ADB        = 'adb';
+const FFMPEG     = 'ffmpeg';
+const VIDEO_BPS  = '1200k';   // bitrate video MPEG1
+const FPS        = 20;
+// IPs permitidas en la VPN (solo rango vending)
+const ALLOWED_SUBNET = /^10\.99\.0\.\d{1,3}$/;
 
-const wss = new WebSocketServer({ port: PORT });
-console.log(`[scrcpy-ws] Escuchando en ws://127.0.0.1:${PORT}`);
-
-wss.on('connection', (ws, req) => {
-    const params = new URLSearchParams(req.url.replace(/^\/\?/, ''));
-    const device = params.get('device'); // ej: 10.99.0.2 o 10.99.0.2:5555
-
-    if (!device || !/^[\d.]+(?::\d+)?$/.test(device)) {
-        ws.close(1008, 'Parámetro device inválido');
-        return;
-    }
-
-    const target = device.includes(':') ? device : `${device}:5555`;
-    console.log(`[scrcpy-ws] Nueva conexión → device=${target}`);
-
-    // ── Conectar ADB ──────────────────────────────────────────
-    try {
-        execSync(`adb connect ${target}`, { timeout: 5000 });
-    } catch (e) {
-        console.error(`[scrcpy-ws] adb connect falló: ${e.message}`);
-        ws.close(1011, 'adb connect falló');
-        return;
-    }
-
-    // Breve pausa para que adb establezca la conexión
-    setTimeout(() => startStream(ws, target), ADB_CONNECT_WAIT);
+// ─── Servidor HTTP base ───────────────────────────────────────────────────────
+const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('scrcpy-ws OK\n');
 });
 
-function startStream(ws, target) {
-    if (ws.readyState !== WebSocket.OPEN) return;
+const wss = new WebSocket.Server({ server });
 
-    // ── Lanzar scrcpy en modo headless ───────────────────────
-    // --no-display : sin ventana local
-    // --video-codec=h264 : H.264 para decodificar en browser con MSE
-    // --record-format=mkv : salida a stdout en contenedor mkv
-    // --serial : elige el dispositivo específico
-    const scrcpy = spawn('scrcpy', [
-        '--serial',        target,
-        '--no-display',
-        '--video-codec=h264',
-        '--record=-',
-        '--record-format=mkv',
-        '--bit-rate=2M',
-        '--max-fps=30',
-        '--max-size=1280',
-    ]);
+// ─── Conexión WebSocket ───────────────────────────────────────────────────────
+wss.on('connection', (ws, req) => {
+    // Debug: mostrar URL exacta que llega (ayuda a diagnosticar proxies nginx)
+    console.log(`[scrcpy-ws] req.url = "${req.url}"`);
 
-    // ── Pipe stdout de scrcpy al WebSocket ────────────────────
-    scrcpy.stdout.on('data', (chunk) => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(chunk, { binary: true }, (err) => {
-                if (err) console.error(`[scrcpy-ws] ws.send error: ${err.message}`);
-            });
+    // Parsear query string robustamente (soporta /path?k=v y ?k=v)
+    let params;
+    try {
+        params = new url.URL(req.url, 'http://localhost').searchParams;
+    } catch (_) {
+        params = new url.URLSearchParams((req.url || '').split('?')[1] || '');
+    }
+
+    const device    = params.get('device');   // IP de la vending, ej: 10.99.0.2
+    const widthReq  = parseInt(params.get('w') || '720',  10);
+    const heightReq = parseInt(params.get('h') || '1280', 10);
+
+    // Validar IP
+    if (!device || !ALLOWED_SUBNET.test(device)) {
+        console.warn(`[scrcpy-ws] IP rechazada: "${device}" (req.url="${req.url}")`);
+        ws.close(1008, 'IP no permitida');
+        return;
+    }
+
+    const adbTarget = `${device}:5555`;
+    console.log(`[scrcpy-ws] Conectando a ${adbTarget} (${widthReq}x${heightReq})`);
+
+    let adb    = null;
+    let ffmpeg = null;
+    let alive  = true;
+
+    // ─── Lanzar stream ────────────────────────────────────────────────────────
+    function startStream() {
+        if (!alive) return;
+
+        // screenrecord → H.264 raw por stdout
+        adb = spawn(ADB, [
+            '-s', adbTarget,
+            'exec-out',
+            'screenrecord',
+            '--output-format=h264',
+            '--bit-rate', '2000000',
+            '--size', `${widthReq}x${heightReq}`,
+            '-'
+        ]);
+
+        // H.264 → MPEG1 en MPEG-TS (formato que JSMpeg entiende)
+        ffmpeg = spawn(FFMPEG, [
+            '-loglevel', 'quiet',
+            '-f',        'h264',
+            '-i',        'pipe:0',
+            '-c:v',      'mpeg1video',
+            '-b:v',      VIDEO_BPS,
+            '-r',        String(FPS),
+            '-bf',       '0',
+            '-f',        'mpegts',
+            'pipe:1'
+        ]);
+
+        adb.stdout.pipe(ffmpeg.stdin);
+
+        // Enviar chunks de video al browser
+        ffmpeg.stdout.on('data', chunk => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(chunk, { binary: true }, err => {
+                    if (err) console.error('[scrcpy-ws] send error:', err.message);
+                });
+            }
+        });
+
+        adb.stderr.on('data', d => console.error(`[adb] ${d}`));
+        ffmpeg.stderr.on('data', d => { /* silencio — ya está en loglevel quiet */ });
+
+        // Reiniciar si screenrecord termina (límite 3 min en algunos Android)
+        adb.on('exit', code => {
+            console.log(`[scrcpy-ws] screenrecord terminó (code ${code}), reiniciando...`);
+            ffmpeg.kill('SIGKILL');
+            if (alive) setTimeout(startStream, 800);
+        });
+
+        ffmpeg.on('exit', code => {
+            console.log(`[scrcpy-ws] ffmpeg terminó (code ${code})`);
+            adb.kill('SIGKILL');
+            if (alive) setTimeout(startStream, 800);
+        });
+    }
+
+    startStream();
+
+    // ─── Recibir eventos de input desde el browser ────────────────────────────
+    ws.on('message', raw => {
+        try {
+            const ev = JSON.parse(raw);
+            const s  = `${adbTarget}`;
+
+            if (ev.type === 'tap') {
+                spawn(ADB, ['-s', s, 'shell', 'input', 'tap',
+                    Math.round(ev.x), Math.round(ev.y)]);
+
+            } else if (ev.type === 'swipe') {
+                spawn(ADB, ['-s', s, 'shell', 'input', 'swipe',
+                    Math.round(ev.x1), Math.round(ev.y1),
+                    Math.round(ev.x2), Math.round(ev.y2),
+                    ev.duration || 200]);
+
+            } else if (ev.type === 'key') {
+                // keycode: 3=Home, 4=Back, 187=Recents
+                spawn(ADB, ['-s', s, 'shell', 'input', 'keyevent', ev.keycode]);
+
+            } else if (ev.type === 'text') {
+                spawn(ADB, ['-s', s, 'shell', 'input', 'text', ev.value]);
+            }
+        } catch (e) {
+            console.error('[scrcpy-ws] mensaje inválido:', e.message);
         }
     });
 
-    scrcpy.stderr.on('data', (d) => process.stdout.write(`[scrcpy] ${d}`));
-
-    scrcpy.on('close', (code) => {
-        console.log(`[scrcpy-ws] scrcpy terminó (code=${code}) device=${target}`);
-        if (ws.readyState === WebSocket.OPEN) ws.close();
-    });
-
-    // ── Cuando el browser cierra → matar scrcpy ───────────────
+    // ─── Limpiar al desconectar ────────────────────────────────────────────────
     ws.on('close', () => {
-        console.log(`[scrcpy-ws] Browser desconectado → device=${target}`);
-        scrcpy.kill('SIGTERM');
-        try { execSync(`adb disconnect ${target}`); } catch (_) {}
+        console.log(`[scrcpy-ws] Cliente desconectado de ${adbTarget}`);
+        alive = false;
+        if (adb)    adb.kill('SIGKILL');
+        if (ffmpeg) ffmpeg.kill('SIGKILL');
     });
 
-    ws.on('error', (err) => {
-        console.error(`[scrcpy-ws] ws error: ${err.message}`);
-        scrcpy.kill('SIGTERM');
+    ws.on('error', err => {
+        console.error('[scrcpy-ws] WebSocket error:', err.message);
     });
-}
+});
+
+server.listen(PORT, '127.0.0.1', () => {
+    console.log(`[scrcpy-ws] Servidor iniciado en 127.0.0.1:${PORT}`);
+});

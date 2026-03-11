@@ -62,14 +62,9 @@ adb version
 ffmpeg -version | head -1
 ```
 
-> **Nota sobre scrcpy:** `scrcpy` en el VPS headless funciona distinto al desktop.
-> El servidor Node.js usa `scrcpy` internamente para conectarse al Android por ADB.
-> Instalar con:
-> ```bash
-> apt install -y scrcpy
-> # o si la versión del repo es muy vieja (< 2.0):
-> snap install scrcpy
-> ```
+> **Nota:** El servidor usa `adb exec-out screenrecord` (requiere Android 10+) y
+> `ffmpeg` para convertir H.264 → MPEG1/MPEG-TS (el formato que JSMpeg entiende
+> en el browser). **No instalar scrcpy** — no es necesario.
 
 ---
 
@@ -84,7 +79,7 @@ npm install ws
 
 # Verificar que arranca:
 node server.js
-# Debe mostrar: [scrcpy-ws] Escuchando en ws://127.0.0.1:3001
+# Debe mostrar: [scrcpy-ws] Servidor iniciado en 127.0.0.1:3001
 # Ctrl+C para detener
 ```
 
