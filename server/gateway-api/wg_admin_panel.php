@@ -894,6 +894,7 @@ function connectStream(ip) {
     autoplay:        true,
     audio:           false,
     loop:            false,
+    disableGl:       true,
     preserveDrawingBuffer: false,
     onSourceEstablished: () => {
       document.getElementById('screenStatus').textContent = '🟢 En vivo';
