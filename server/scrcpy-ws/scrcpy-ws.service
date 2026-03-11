@@ -1,0 +1,15 @@
+[Unit]
+Description=scrcpy WebSocket Server (multi-maquina Powerbox)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/scrcpy-ws
+ExecStart=/usr/bin/node /opt/scrcpy-ws/server.js
+Restart=always
+RestartSec=5
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
